@@ -28,22 +28,35 @@ import { PermissionGuard } from './guards/PermissionGuard';
 
 function HomeRedirect() {
   const user = useAuthStore((state) => state.user);
+  const hasPermission = useAuthStore((state) => state.hasPermission);
   const activeContext = useOperationalStore((state) => state.activeContext);
   const activeCash = useOperationalStore((state) => state.activeCash);
-
-  if (user?.role === 'Administrador') {
-    return <Navigate replace to={activeContext ? '/admin/productos' : '/contexto'} />;
-  }
 
   if (!activeContext) {
     return <Navigate replace to="/contexto" />;
   }
 
-  if (!activeCash || activeCash.status !== 'open') {
+  if (user?.role === 'Administrador' && hasPermission('producto.ver')) {
+    return <Navigate replace to={activeContext ? '/admin/productos' : '/contexto'} />;
+  }
+
+  if (hasPermission('venta.registrar') && (!activeCash || activeCash.status !== 'open')) {
     return <Navigate replace to="/caja/apertura" />;
   }
 
-  return <Navigate replace to="/caja/activa" />;
+  if (hasPermission('venta.registrar') || hasPermission('caja.cerrar')) {
+    return <Navigate replace to="/caja/activa" />;
+  }
+
+  if (hasPermission('compra.registrar')) {
+    return <Navigate replace to="/compras/nueva" />;
+  }
+
+  if (hasPermission('stock.consultar')) {
+    return <Navigate replace to="/stock" />;
+  }
+
+  return <Navigate replace to="/sin-permiso" />;
 }
 
 function AccessDeniedPage() {

@@ -1,24 +1,36 @@
+import { useMutation } from '@tanstack/react-query';
 import { NavLink, Outlet } from 'react-router-dom';
 import { AppLogo } from '../components/ui/AppLogo';
 import { StatusBadge } from '../components/ui/StatusBadge';
+import { logoutRequest } from '../services/auth/auth-api';
 import { useAuthStore } from '../store/auth-store';
 import { useOperationalStore } from '../store/operational-store';
 
-const navItems = [
-  { to: '/contexto', label: 'Contexto' },
-  { to: '/caja/apertura', label: 'Apertura' },
-  { to: '/caja/activa', label: 'Caja activa' },
-  { to: '/ventas/nueva', label: 'Venta rapida' },
-  { to: '/egresos/nuevo', label: 'Egresos' },
-  { to: '/stock', label: 'Stock' },
-];
-
 export function OperationalLayout() {
   const user = useAuthStore((state) => state.user);
-  const signOut = useAuthStore((state) => state.signOut);
+  const clearSession = useAuthStore((state) => state.clearSession);
+  const hasPermission = useAuthStore((state) => state.hasPermission);
   const clearOperationalState = useOperationalStore((state) => state.clearOperationalState);
   const activeContext = useOperationalStore((state) => state.activeContext);
   const activeCash = useOperationalStore((state) => state.activeCash);
+  const logoutMutation = useMutation({
+    mutationFn: logoutRequest,
+    onSettled: () => {
+      clearSession();
+      clearOperationalState();
+    },
+  });
+
+  const navItems = [
+    { to: '/contexto', label: 'Contexto', visible: true },
+    { to: '/caja/apertura', label: 'Apertura', visible: hasPermission('caja.abrir') },
+    { to: '/caja/activa', label: 'Caja activa', visible: true },
+    { to: '/ventas/nueva', label: 'Venta rapida', visible: hasPermission('venta.registrar') },
+    { to: '/egresos/nuevo', label: 'Egresos', visible: hasPermission('egreso.registrar') },
+    { to: '/compras/nueva', label: 'Compras', visible: hasPermission('compra.registrar') },
+    { to: '/stock', label: 'Stock', visible: hasPermission('stock.consultar') },
+    { to: '/reportes', label: 'Reportes', visible: hasPermission('reporte.ver') },
+  ].filter((item) => item.visible);
 
   return (
     <div className="min-h-screen bg-app-gradient">
@@ -79,13 +91,11 @@ export function OperationalLayout() {
 
             <button
               className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-rose-200 hover:text-rose-600"
-              onClick={() => {
-                signOut();
-                clearOperationalState();
-              }}
+              disabled={logoutMutation.isPending}
+              onClick={() => logoutMutation.mutate()}
               type="button"
             >
-              Cerrar sesion demo
+              {logoutMutation.isPending ? 'Cerrando sesion...' : 'Cerrar sesion'}
             </button>
           </div>
         </aside>

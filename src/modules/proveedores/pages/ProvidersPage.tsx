@@ -1,18 +1,144 @@
-import { PlaceholderPage } from '../../../components/ui/PlaceholderPage';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { MetricCard } from '../../../components/ui/MetricCard';
+import { ResourcePageShell } from '../../../components/ui/ResourcePageShell';
+import { ResourceState } from '../../../components/ui/ResourceState';
+import { ResourceTable } from '../../../components/ui/ResourceTable';
+import { StatusBadge } from '../../../components/ui/StatusBadge';
+import { getApiErrorMessage } from '../../../services/api/errors';
+import type { CreateProviderRequest, ProviderDto } from '../../../services/api/types';
+import { createProvider, fetchProviders } from '../../../services/catalogs/catalogs-api';
+
+const providerSchema = z.object({
+  name: z.string().min(1, 'Ingresa el nombre del proveedor.'),
+  documentNumber: z.string().optional(),
+  contactName: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().email('Ingresa un correo valido.').or(z.literal('')).optional(),
+  active: z.boolean(),
+});
+
+type ProviderFormValues = z.infer<typeof providerSchema>;
+const inputClass = 'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-500';
 
 export function ProvidersPage() {
+  const queryClient = useQueryClient();
+  const providersQuery = useQuery({
+    queryKey: ['admin', 'proveedores'],
+    queryFn: fetchProviders,
+    retry: false,
+  });
+
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<ProviderFormValues>({
+    resolver: zodResolver(providerSchema),
+    defaultValues: { name: '', documentNumber: '', contactName: '', phone: '', email: '', active: true },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (values: CreateProviderRequest) => createProvider(values),
+    onSuccess: () => {
+      reset();
+      queryClient.invalidateQueries({ queryKey: ['admin', 'proveedores'] });
+    },
+  });
+
+  const providers = providersQuery.data ?? [];
+  const activeProviders = providers.filter((provider) => provider.active).length;
+
   return (
-    <PlaceholderPage
-      description="Modulo base para proveedores dentro del layout administrativo. Sirve para fijar navegacion y permisos desde temprano."
-      documents={['13 - Arquitectura funcional frontend', '17 - Layouts y rutas', '25 - Orquestador Fase 1']}
-      eyebrow="Admin proveedores"
-      nextStep="Siguiente fase: listado, alta y edicion vinculadas a compras."
-      phaseCoverage="Organiza el espacio administrativo sin adelantar formularios finales."
-      quickLinks={[
-        { label: 'Compras', to: '/compras/nueva' },
-        { label: 'Productos', to: '/admin/productos' },
-      ]}
-      title="Proveedores preparados"
-    />
+    <ResourcePageShell
+      badge="FE-PRV-001 Proveedores"
+      description="Vista conectada a `GET /api/v1/proveedores` y `POST /api/v1/proveedores` para validar el catalogo de abastecimiento real."
+      documents={['04 - HU-COM-001', '18 - API-PRV-001/API-PRV-002', '25 - Orquestador Fase 1']}
+      summary={
+        <div className="grid gap-4 md:grid-cols-3">
+          <MetricCard helper="Datos entregados por tu backend actual." label="Proveedores" value={String(providers.length)} />
+          <MetricCard helper="Disponibles para compras operativas." label="Activos" value={String(activeProviders)} />
+          <MetricCard helper="Listos para enlazar con compras." label="Contactos visibles" value={String(providers.filter((provider) => provider.contactName).length)} />
+        </div>
+      }
+      title="Proveedores"
+    >
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
+        <div className="mb-5">
+          <h2 className="text-lg font-semibold text-slate-950">Registrar proveedor</h2>
+          <p className="mt-2 text-sm text-slate-600">Formulario alineado al contrato `CreateProviderRequest` del backend.</p>
+        </div>
+        <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit((values) => createMutation.mutate(values))}>
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-slate-700">Nombre</span>
+            <input className={inputClass} {...register('name')} />
+            {errors.name ? <span className="text-xs text-rose-600">{errors.name.message}</span> : null}
+          </label>
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-slate-700">Documento</span>
+            <input className={inputClass} {...register('documentNumber')} />
+          </label>
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-slate-700">Contacto</span>
+            <input className={inputClass} {...register('contactName')} />
+          </label>
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-slate-700">Telefono</span>
+            <input className={inputClass} {...register('phone')} />
+          </label>
+          <label className="space-y-2 md:col-span-2">
+            <span className="text-sm font-medium text-slate-700">Correo</span>
+            <input className={inputClass} {...register('email')} />
+            {errors.email ? <span className="text-xs text-rose-600">{errors.email.message}</span> : null}
+          </label>
+          <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 md:col-span-2">
+            <input type="checkbox" {...register('active')} />
+            <span className="text-sm text-slate-700">Activo</span>
+          </label>
+          <div className="md:col-span-2">
+            {createMutation.isError ? <div className="mb-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{getApiErrorMessage(createMutation.error, 'No se pudo registrar el proveedor.')}</div> : null}
+            {createMutation.isSuccess ? <div className="mb-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Proveedor registrado correctamente.</div> : null}
+            <button className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-400" disabled={createMutation.isPending} type="submit">
+              {createMutation.isPending ? 'Guardando proveedor...' : 'Guardar proveedor'}
+            </button>
+          </div>
+        </form>
+      </section>
+
+      {providersQuery.isLoading ? <ResourceState body="Consultando proveedores..." title="Cargando proveedores" /> : null}
+      {providersQuery.isError ? <ResourceState body={getApiErrorMessage(providersQuery.error, 'No se pudo cargar la lista de proveedores.')} title="Error al consultar proveedores" tone="danger" /> : null}
+      {!providersQuery.isLoading && !providersQuery.isError && providers.length === 0 ? <ResourceState body="Aun no hay proveedores registrados en el backend." title="Lista vacia" tone="warning" /> : null}
+      {!providersQuery.isLoading && !providersQuery.isError && providers.length > 0 ? (
+        <ResourceTable<ProviderDto>
+          columns={[
+            {
+              key: 'name',
+              header: 'Proveedor',
+              render: (provider) => (
+                <div>
+                  <p className="font-medium text-slate-900">{provider.name}</p>
+                  <p className="text-xs text-slate-500">{provider.documentNumber ?? 'Sin documento'}</p>
+                </div>
+              ),
+            },
+            {
+              key: 'contact',
+              header: 'Contacto',
+              render: (provider) => (
+                <div>
+                  <p>{provider.contactName ?? 'No definido'}</p>
+                  <p className="text-xs text-slate-500">{provider.phone ?? provider.email ?? 'Sin telefono ni correo'}</p>
+                </div>
+              ),
+            },
+            {
+              key: 'status',
+              header: 'Estado',
+              render: (provider) => <StatusBadge label={provider.active ? 'Activo' : 'Inactivo'} tone={provider.active ? 'success' : 'warning'} />,
+            },
+          ]}
+          rowKey={(provider) => String(provider.id)}
+          rows={providers}
+        />
+      ) : null}
+    </ResourcePageShell>
   );
 }

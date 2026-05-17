@@ -1,5 +1,6 @@
 import { env } from '../../app/config/env';
 import { useAuthStore } from '../../store/auth-store';
+import type { ApiResponse } from './types';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -10,12 +11,21 @@ type RequestOptions = {
 };
 
 export class ApiError extends Error {
+  public readonly apiCode: string | null;
+  public readonly apiMessage: string | null;
+
   constructor(
     message: string,
     public readonly status: number,
+    options?: {
+      apiCode?: string | null;
+      apiMessage?: string | null;
+    },
   ) {
     super(message);
     this.name = 'ApiError';
+    this.apiCode = options?.apiCode ?? null;
+    this.apiMessage = options?.apiMessage ?? null;
   }
 }
 
@@ -32,7 +42,22 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   });
 
   if (!response.ok) {
-    throw new ApiError(`Request failed with status ${response.status}`, response.status);
+    let apiMessage: string | null = null;
+    let apiCode: string | null = null;
+
+    try {
+      const errorPayload = (await response.json()) as Partial<ApiResponse<unknown>>;
+      apiMessage = errorPayload.message ?? null;
+      apiCode = errorPayload.error?.code ?? null;
+    } catch {
+      apiMessage = null;
+      apiCode = null;
+    }
+
+    throw new ApiError(apiMessage ?? `Request failed with status ${response.status}`, response.status, {
+      apiCode,
+      apiMessage,
+    });
   }
 
   if (response.status === 204) {

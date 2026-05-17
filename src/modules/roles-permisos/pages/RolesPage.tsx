@@ -1,18 +1,131 @@
-import { PlaceholderPage } from '../../../components/ui/PlaceholderPage';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { MetricCard } from '../../../components/ui/MetricCard';
+import { ResourcePageShell } from '../../../components/ui/ResourcePageShell';
+import { ResourceState } from '../../../components/ui/ResourceState';
+import { ResourceTable } from '../../../components/ui/ResourceTable';
+import { getApiErrorMessage } from '../../../services/api/errors';
+import type { CreateRoleRequest, RoleDto } from '../../../services/api/types';
+import { createRole, fetchRoles } from '../../../services/security/security-api';
+
+const roleSchema = z.object({
+  name: z.string().min(1, 'Ingresa el nombre del rol.'),
+  description: z.string().optional(),
+  permissionsInput: z.string().optional(),
+});
+
+type RoleFormValues = z.infer<typeof roleSchema>;
+const inputClass = 'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-500';
 
 export function RolesPage() {
+  const queryClient = useQueryClient();
+  const rolesQuery = useQuery({
+    queryKey: ['admin', 'roles'],
+    queryFn: fetchRoles,
+    retry: false,
+  });
+
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<RoleFormValues>({
+    resolver: zodResolver(roleSchema),
+    defaultValues: { name: '', description: '', permissionsInput: '' },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (values: CreateRoleRequest) => createRole(values),
+    onSuccess: () => {
+      reset();
+      queryClient.invalidateQueries({ queryKey: ['admin', 'roles'] });
+    },
+  });
+
+  const roles = rolesQuery.data ?? [];
+
   return (
-    <PlaceholderPage
-      description="Pantalla base para futuros permisos visibles del sistema. En Fase 1 sirve para fijar estructura y ruteo."
-      documents={['13 - Arquitectura funcional frontend', '17 - Layouts y rutas', '20 - Checklist de arranque']}
-      eyebrow="Admin roles"
-      nextStep="Siguiente fase: matriz de permisos, detalle de rol y gestion visible."
-      phaseCoverage="Prepara el modulo de seguridad del frontend sin resolver aun reglas definitivas del backend."
-      quickLinks={[
-        { label: 'Usuarios', to: '/admin/usuarios' },
-        { label: 'Contextos', to: '/admin/contextos' },
-      ]}
-      title="Roles y permisos preparados"
-    />
+    <ResourcePageShell
+      badge="FE-SEG-002 Roles"
+      description="Vista conectada a `GET /api/v1/roles` y `POST /api/v1/roles` para validar la capa de permisos visibles del frontend."
+      documents={['04 - HU-SEG-002', '18 - API-ROL-001/API-ROL-002', '17 - Guards y reglas de acceso']}
+      summary={
+        <div className="grid gap-4 md:grid-cols-3">
+          <MetricCard helper="Roles publicados por el backend." label="Roles" value={String(roles.length)} />
+          <MetricCard helper="Permisos visibles en el sistema." label="Permisos totales" value={String(roles.reduce((acc, role) => acc + role.permissions.length, 0))} />
+          <MetricCard helper="Roles con descripcion funcional." label="Con descripcion" value={String(roles.filter((role) => role.description).length)} />
+        </div>
+      }
+      title="Roles y permisos"
+    >
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
+        <div className="mb-5">
+          <h2 className="text-lg font-semibold text-slate-950">Registrar rol</h2>
+          <p className="mt-2 text-sm text-slate-600">Ingresa permisos separados por coma, por ejemplo: `producto.ver, proveedor.ver`.</p>
+        </div>
+        <form
+          className="grid gap-4"
+          onSubmit={handleSubmit((values) =>
+            createMutation.mutate({
+              name: values.name,
+              description: values.description,
+              permissions: values.permissionsInput
+                ? values.permissionsInput.split(',').map((item) => item.trim()).filter(Boolean)
+                : [],
+            }),
+          )}
+        >
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-slate-700">Nombre</span>
+            <input className={inputClass} {...register('name')} />
+            {errors.name ? <span className="text-xs text-rose-600">{errors.name.message}</span> : null}
+          </label>
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-slate-700">Descripcion</span>
+            <input className={inputClass} {...register('description')} />
+          </label>
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-slate-700">Permisos</span>
+            <textarea className={`${inputClass} min-h-24`} {...register('permissionsInput')} />
+          </label>
+          <div>
+            {createMutation.isError ? <div className="mb-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{getApiErrorMessage(createMutation.error, 'No se pudo registrar el rol.')}</div> : null}
+            {createMutation.isSuccess ? <div className="mb-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Rol registrado correctamente.</div> : null}
+            <button className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-400" disabled={createMutation.isPending} type="submit">
+              {createMutation.isPending ? 'Guardando rol...' : 'Guardar rol'}
+            </button>
+          </div>
+        </form>
+      </section>
+
+      {rolesQuery.isLoading ? <ResourceState body="Consultando roles..." title="Cargando roles" /> : null}
+      {rolesQuery.isError ? <ResourceState body={getApiErrorMessage(rolesQuery.error, 'No se pudo consultar la lista de roles.')} title="Error al consultar roles" tone="danger" /> : null}
+      {!rolesQuery.isLoading && !rolesQuery.isError && roles.length === 0 ? <ResourceState body="Aun no hay roles visibles en el backend." title="Sin roles" tone="warning" /> : null}
+      {!rolesQuery.isLoading && !rolesQuery.isError && roles.length > 0 ? (
+        <ResourceTable<RoleDto>
+          columns={[
+            {
+              key: 'name',
+              header: 'Rol',
+              render: (role) => (
+                <div>
+                  <p className="font-medium text-slate-900">{role.name}</p>
+                  <p className="text-xs text-slate-500">{role.description ?? 'Sin descripcion registrada'}</p>
+                </div>
+              ),
+            },
+            {
+              key: 'permissions',
+              header: 'Permisos',
+              render: (role) => (
+                <div className="flex flex-wrap gap-2">
+                  {role.permissions.length > 0 ? role.permissions.map((permission) => <span key={permission.code} className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{permission.code}</span>) : <span className="text-xs text-slate-500">Sin permisos asociados</span>}
+                </div>
+              ),
+            },
+          ]}
+          rowKey={(role) => String(role.id)}
+          rows={roles}
+        />
+      ) : null}
+    </ResourcePageShell>
   );
 }

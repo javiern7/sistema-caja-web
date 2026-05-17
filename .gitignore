@@ -1,0 +1,92 @@
+﻿##################################
+# Node / Angular
+##################################
+node_modules/
+dist/
+out-tsc/
+.tmp/
+.cache/
+
+##################################
+# Angular build / cache
+##################################
+.angular/
+.angular/cache/
+.vite/
+
+##################################
+# Logs
+##################################
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+##################################
+# VS Code
+##################################
+.vscode/
+.idea/
+
+##################################
+# Sistema Operativo
+##################################
+.DS_Store
+Thumbs.db
+
+##################################
+# Entornos / secretos
+##################################
+.env
+.env.*
+!.env.example
+
+##################################
+# Archivos temporales
+##################################
+tmp/
+temp/
+*.tmp
+*.swp
+
+##################################
+# Archivos de respaldo
+##################################
+*.bak
+*.old
+*.orig
+
+##################################
+# Tests / Coverage
+##################################
+coverage/
+playwright-report/
+test-results/
+.playwright/
+
+##################################
+# Angular Universal (si luego usas SSR)
+##################################
+server/
+
+##################################
+# Codex, Playwright
+##################################
+# Codex / Browser artifacts
+.codex-artifacts/
+*.journal
+*Database*
+*wal
+*.db
+*.sqlite
+
+# Playwright / testing
+playwright-report/
+test-results/
+
+# Node
+node_modules/
+dist/
+
+# Ignor

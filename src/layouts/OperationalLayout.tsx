@@ -1,10 +1,14 @@
-import { useMutation } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { NavLink, Outlet } from 'react-router-dom';
 import { AppLogo } from '../components/ui/AppLogo';
 import { StatusBadge } from '../components/ui/StatusBadge';
+import { ApiError } from '../services/api/httpClient';
 import { logoutRequest } from '../services/auth/auth-api';
+import { fetchActiveCashBox } from '../services/cash/cash-api';
 import { useAuthStore } from '../store/auth-store';
-import { useOperationalStore } from '../store/operational-store';
+import { normalizeCashBox, useOperationalStore } from '../store/operational-store';
+import { formatCurrency } from '../utils/format';
 
 export function OperationalLayout() {
   const user = useAuthStore((state) => state.user);
@@ -13,6 +17,7 @@ export function OperationalLayout() {
   const clearOperationalState = useOperationalStore((state) => state.clearOperationalState);
   const activeContext = useOperationalStore((state) => state.activeContext);
   const activeCash = useOperationalStore((state) => state.activeCash);
+  const setActiveCash = useOperationalStore((state) => state.setActiveCash);
   const logoutMutation = useMutation({
     mutationFn: logoutRequest,
     onSettled: () => {
@@ -20,6 +25,31 @@ export function OperationalLayout() {
       clearOperationalState();
     },
   });
+  const activeCashQuery = useQuery({
+    queryKey: ['cash-box', 'active', activeContext?.id],
+    queryFn: fetchActiveCashBox,
+    enabled: Boolean(activeContext),
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (!activeContext) {
+      setActiveCash(null);
+      return;
+    }
+
+    if (activeCashQuery.isSuccess) {
+      const normalizedCash = normalizeCashBox(activeCashQuery.data);
+      setActiveCash(normalizedCash.operationalContextId === activeContext.id ? normalizedCash : null);
+      return;
+    }
+
+    if (activeCashQuery.isError) {
+      if (activeCashQuery.error instanceof ApiError && activeCashQuery.error.status === 404) {
+        setActiveCash(null);
+      }
+    }
+  }, [activeCashQuery.data, activeCashQuery.error, activeCashQuery.isError, activeCashQuery.isSuccess, activeContext, setActiveCash]);
 
   const navItems = [
     { to: '/contexto', label: 'Contexto', visible: true },
@@ -62,13 +92,13 @@ export function OperationalLayout() {
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-slate-900">Caja</p>
                 <StatusBadge
-                  label={activeCash?.status === 'open' ? 'Abierta' : 'Sin apertura'}
-                  tone={activeCash?.status === 'open' ? 'success' : 'warning'}
+                  label={activeCashQuery.isLoading ? 'Validando' : activeCash?.status === 'ABIERTA' ? 'Abierta' : 'Sin apertura'}
+                  tone={activeCash?.status === 'ABIERTA' ? 'success' : 'warning'}
                 />
               </div>
               <p className="text-sm text-slate-600">
-                {activeCash?.status === 'open'
-                  ? `Monto de apertura referencial: S/ ${activeCash.openingAmount.toFixed(2)}`
+                {activeCash?.status === 'ABIERTA'
+                  ? `Monto de apertura registrado: ${formatCurrency(activeCash.openingAmount)}`
                   : 'La operacion guiara primero a apertura de caja.'}
               </p>
             </div>

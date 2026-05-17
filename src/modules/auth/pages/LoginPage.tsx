@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { getApiErrorCode, getApiErrorMessage } from '../../../services/api/errors';
 import { loginRequest } from '../../../services/auth/auth-api';
@@ -19,7 +19,6 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const location = useLocation();
   const setSession = useAuthStore((state) => state.setSession);
   const clearOperationalState = useOperationalStore((state) => state.clearOperationalState);
 
@@ -40,11 +39,7 @@ export function LoginPage() {
     onSuccess: (session) => {
       clearOperationalState();
       setSession(session);
-
-      const fallbackRoute = '/';
-      const nextRoute = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? fallbackRoute;
-
-      navigate(nextRoute, { replace: true });
+      navigate('/inicio', { replace: true });
     },
   });
 

@@ -6,26 +6,23 @@ import { useAuthStore } from '../../store/auth-store';
 
 export function AuthBootstrap() {
   const token = useAuthStore((state) => state.token);
-  const bootstrapStatus = useAuthStore((state) => state.bootstrapStatus);
-  const setBootstrapStatus = useAuthStore((state) => state.setBootstrapStatus);
+  const status = useAuthStore((state) => state.status);
   const hydrateSession = useAuthStore((state) => state.hydrateSession);
-  const clearSession = useAuthStore((state) => state.clearSession);
+  const invalidateSession = useAuthStore((state) => state.invalidateSession);
 
   const sessionQuery = useQuery({
     queryKey: ['auth', 'me'],
     queryFn: fetchCurrentSession,
-    enabled: Boolean(token),
+    enabled: Boolean(token) && status === 'bootstrapping',
     retry: false,
   });
 
   useEffect(() => {
     if (!token) {
-      setBootstrapStatus('ready');
       return;
     }
 
-    if (sessionQuery.isLoading) {
-      setBootstrapStatus('loading');
+    if (status !== 'bootstrapping') {
       return;
     }
 
@@ -35,22 +32,20 @@ export function AuthBootstrap() {
     }
 
     if (sessionQuery.isError) {
-      clearSession();
-      setBootstrapStatus('error', getApiErrorMessage(sessionQuery.error, 'No se pudo recuperar la sesion actual.'));
+      invalidateSession(getApiErrorMessage(sessionQuery.error, 'No se pudo recuperar la sesion actual.'));
     }
   }, [
-    clearSession,
     hydrateSession,
+    invalidateSession,
     sessionQuery.data,
     sessionQuery.error,
     sessionQuery.isError,
-    sessionQuery.isLoading,
     sessionQuery.isSuccess,
-    setBootstrapStatus,
+    status,
     token,
   ]);
 
-  if (token && (bootstrapStatus === 'loading' || sessionQuery.isLoading)) {
+  if (token && status === 'bootstrapping') {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20 backdrop-blur-sm">
         <div className="rounded-3xl bg-white px-6 py-5 shadow-soft">

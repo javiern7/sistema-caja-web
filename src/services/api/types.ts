@@ -16,7 +16,9 @@ export type AuthApiUser = {
   username?: string;
   displayName?: string;
   fullName?: string;
-  role: string;
+  role?: string;
+  roleName?: string;
+  email?: string;
 };
 
 export type AuthSessionPayload = {
@@ -130,4 +132,223 @@ export type CreateOperationalContextRequest = {
   startDate: string;
   endDate?: string;
   description?: string;
+};
+
+export type CashMovementDto = {
+  id: string | number;
+  movementType: string;
+  amount: number;
+  referenceType?: string;
+  referenceId?: string;
+  performedBy?: string;
+  occurredAt?: string;
+  observation?: string;
+};
+
+export type CashBoxDto = {
+  id: string | number;
+  operationalContextId: string | number;
+  operationalContextCode?: string;
+  operationalContextName?: string;
+  openedByUserId?: string | number;
+  openedByUsername?: string;
+  status: 'ABIERTA' | 'CERRADA' | string;
+  openingAmount: number;
+  totalSales: number;
+  additionalIncome: number;
+  totalExpenses: number;
+  expectedAmount: number;
+  countedAmount?: number | null;
+  differenceAmount?: number | null;
+  openingObservation?: string;
+  closingObservation?: string;
+  openedAt?: string;
+  closedAt?: string;
+  closedByUsername?: string;
+  movements: CashMovementDto[];
+};
+
+export type OpenCashBoxRequest = {
+  operationalContextId: number;
+  openingAmount: number;
+  observation?: string;
+};
+
+export type CloseCashBoxRequest = {
+  countedAmount: number;
+  observation?: string;
+};
+
+export type StockCurrentDto = {
+  productId: string | number;
+  productCode: string;
+  productName: string;
+  unitOfMeasure: string;
+  stockControlled: boolean;
+  productActive: boolean;
+  currentStock: number;
+  minimumStock: number;
+  updatedAt?: string;
+};
+
+export type StockMovementDto = {
+  id: string | number;
+  productId: string | number;
+  productCode: string;
+  productName: string;
+  movementType: string;
+  quantity: number;
+  referenceType?: string;
+  referenceId?: string;
+  performedBy?: string;
+  occurredAt?: string;
+  note?: string;
+};
+
+export type SaleItemRequest = {
+  productId: number;
+  quantity: number;
+  unitPrice: number;
+};
+
+export type SalePaymentRequest = {
+  paymentMethod: string;
+  amount: number;
+};
+
+export type CreateSaleRequest = {
+  operationalContextId: number;
+  cashBoxId: number;
+  items: SaleItemRequest[];
+  payments: SalePaymentRequest[];
+  observation?: string;
+};
+
+export type CancelSaleRequest = {
+  reason: string;
+};
+
+export type SaleItemDto = {
+  id: string | number;
+  productId: string | number;
+  productCode: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  subtotalAmount: number;
+};
+
+export type SalePaymentDto = {
+  id: string | number;
+  paymentMethod: string;
+  amount: number;
+};
+
+export type SaleDto = {
+  id: string | number;
+  operationalContextId: string | number;
+  operationalContextName?: string;
+  cashBoxId: string | number;
+  soldByUsername?: string;
+  status: string;
+  subtotalAmount: number;
+  totalAmount: number;
+  internalReceiptSeries?: string;
+  internalReceiptNumber?: number;
+  observation?: string;
+  createdAt?: string;
+  cancelledAt?: string;
+  cancelledByUsername?: string;
+  cancellationReason?: string;
+  items: SaleItemDto[];
+  payments: SalePaymentDto[];
+};
+
+export type PurchaseItemRequest = {
+  productId: number;
+  quantity: number;
+  unitCost: number;
+};
+
+export type CreatePurchaseRequest = {
+  operationalContextId: number;
+  providerId: number;
+  purchaseDate: string;
+  documentType?: string;
+  documentNumber?: string;
+  paymentMethod?: string;
+  items: PurchaseItemRequest[];
+  observation?: string;
+};
+
+export type CancelPurchaseItemRequest = {
+  purchaseItemId: number;
+  cancelledQuantity: number;
+};
+
+export type CancelPurchaseRequest = {
+  reason: string;
+  cancelledItems: CancelPurchaseItemRequest[];
+};
+
+export type PurchaseItemDto = {
+  id: string | number;
+  productId: string | number;
+  productCode: string;
+  productName: string;
+  quantity: number;
+  cancelledQuantity: number;
+  unitCost: number;
+  subtotalAmount: number;
+};
+
+export type PurchaseDto = {
+  id: string | number;
+  operationalContextId: string | number;
+  operationalContextName?: string;
+  providerId: string | number;
+  providerName?: string;
+  status: string;
+  purchaseDate: string;
+  documentType?: string;
+  documentNumber?: string;
+  paymentMethod?: string;
+  subtotalAmount: number;
+  totalAmount: number;
+  observation?: string;
+  createdAt?: string;
+  cancelledAt?: string;
+  cancelledByUsername?: string;
+  cancellationReason?: string;
+  items: PurchaseItemDto[];
+};
+
+export type CreateExpenseRequest = {
+  operationalContextId: number;
+  cashBoxId?: number;
+  expenseType: string;
+  category: string;
+  description: string;
+  paymentMethod?: string;
+  amount: number;
+  responsible?: string;
+  observation?: string;
+  expenseDate: string;
+};
+
+export type ExpenseDto = {
+  id: string | number;
+  operationalContextId: string | number;
+  operationalContextName?: string;
+  cashBoxId?: string | number;
+  expenseType: string;
+  category: string;
+  description: string;
+  paymentMethod?: string;
+  amount: number;
+  responsible?: string;
+  observation?: string;
+  recordedByUsername?: string;
+  expenseDate: string;
+  createdAt?: string;
 };

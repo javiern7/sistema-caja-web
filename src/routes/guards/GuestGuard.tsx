@@ -3,14 +3,13 @@ import { AuthGateFallback } from '../../components/ui/AuthGateFallback';
 import { useAuthStore } from '../../store/auth-store';
 
 export function GuestGuard() {
-  const token = useAuthStore((state) => state.token);
-  const bootstrapStatus = useAuthStore((state) => state.bootstrapStatus);
+  const status = useAuthStore((state) => state.status);
 
-  if (token && (bootstrapStatus === 'idle' || bootstrapStatus === 'loading')) {
+  if (status === 'bootstrapping') {
     return <AuthGateFallback message="Validando si la sesion guardada sigue activa..." />;
   }
 
-  if (token) {
+  if (status === 'authenticated') {
     return <Navigate replace to="/" />;
   }
 

@@ -15,8 +15,7 @@ export type AuthUser = {
   permissions: AppPermission[];
 };
 
-type AuthStatus = 'anonymous' | 'authenticated';
-type AuthBootstrapStatus = 'idle' | 'loading' | 'ready' | 'error';
+export type AuthStatus = 'anonymous' | 'bootstrapping' | 'authenticated';
 
 type HydratableSession =
   | Omit<AuthSessionPayload, 'token'>
@@ -34,12 +33,11 @@ type AuthState = {
   token: string | null;
   user: AuthUser | null;
   status: AuthStatus;
-  bootstrapStatus: AuthBootstrapStatus;
   bootstrapError: string | null;
   setSession: (session: AuthSessionPayload) => void;
   hydrateSession: (session: HydratableSession) => void;
   clearSession: () => void;
-  setBootstrapStatus: (status: AuthBootstrapStatus, error?: string | null) => void;
+  invalidateSession: (error?: string | null) => void;
   hasPermission: (permission: AppPermission) => boolean;
 };
 
@@ -64,10 +62,10 @@ function normalizeRole(role: string): AppRole | string {
 function normalizeUser(user: AuthApiUser, permissions: string[]): AuthUser {
   return {
     id: String(user.id),
-    username: user.username ?? String(user.id),
-    displayName: user.displayName ?? user.fullName ?? user.username ?? 'Usuario',
-    role: normalizeRole(user.role),
-    permissions,
+    username: user.username ?? user.email ?? String(user.id),
+    displayName: user.displayName ?? user.fullName ?? user.username ?? user.email ?? 'Usuario',
+    role: normalizeRole(user.role ?? user.roleName ?? 'Usuario'),
+    permissions: Array.isArray(permissions) ? permissions : [],
   };
 }
 
@@ -113,14 +111,12 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       user: null,
       status: 'anonymous',
-      bootstrapStatus: 'idle',
       bootstrapError: null,
       setSession: (session) =>
         set({
           token: session.token,
           user: normalizeUser(session.user, session.permissions),
           status: 'authenticated',
-          bootstrapStatus: 'ready',
           bootstrapError: null,
         }),
       hydrateSession: (session) =>
@@ -130,8 +126,7 @@ export const useAuthStore = create<AuthState>()(
           return {
             token: state.token,
             user: normalizeUser(resolved.user, resolved.permissions),
-            status: state.token ? 'authenticated' : 'anonymous',
-            bootstrapStatus: 'ready',
+            status: 'authenticated',
             bootstrapError: null,
           };
         }),
@@ -140,11 +135,16 @@ export const useAuthStore = create<AuthState>()(
           token: null,
           user: null,
           status: 'anonymous',
-          bootstrapStatus: 'ready',
           bootstrapError: null,
         }),
-      setBootstrapStatus: (status, error = null) => set({ bootstrapStatus: status, bootstrapError: error }),
-      hasPermission: (permission) => Boolean(get().user?.permissions.includes(permission)),
+      invalidateSession: (error = null) =>
+        set({
+          token: null,
+          user: null,
+          status: 'anonymous',
+          bootstrapError: error,
+        }),
+      hasPermission: (permission) => Boolean(get().user?.permissions?.includes(permission)),
     }),
     {
       name: AUTH_STORAGE_KEY,
@@ -160,15 +160,13 @@ export const useAuthStore = create<AuthState>()(
           ...typedPersistedState,
           token: hasValidSession ? persistedToken : null,
           user: hasValidSession ? persistedUser : null,
-          status: hasValidSession ? 'authenticated' : 'anonymous',
-          bootstrapStatus: 'idle',
+          status: hasValidSession ? 'bootstrapping' : 'anonymous',
           bootstrapError: null,
         };
       },
       partialize: (state) => ({
         token: state.token,
         user: state.user,
-        status: state.status,
       }),
     },
   ),

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { OperationalContextDto } from '../services/api/types';
+import type { CashBoxDto, OperationalContextDto } from '../services/api/types';
 import { OPERATIONAL_STORAGE_KEY } from './storage';
 
 export type OperationalContext = {
@@ -12,8 +12,32 @@ export type OperationalContext = {
 
 export type CashSession = {
   id: string;
+  operationalContextId: string;
+  operationalContextName?: string;
   openingAmount: number;
-  status: 'open' | 'closed';
+  totalSales: number;
+  additionalIncome: number;
+  totalExpenses: number;
+  expectedAmount: number;
+  countedAmount?: number | null;
+  differenceAmount?: number | null;
+  openingObservation?: string;
+  closingObservation?: string;
+  openedAt?: string;
+  closedAt?: string;
+  closedByUsername?: string;
+  openedByUsername?: string;
+  status: 'ABIERTA' | 'CERRADA';
+  movements: Array<{
+    id: string;
+    movementType: string;
+    amount: number;
+    referenceType?: string;
+    referenceId?: string;
+    performedBy?: string;
+    occurredAt?: string;
+    observation?: string;
+  }>;
 };
 
 type OperationalState = {
@@ -42,6 +66,42 @@ function normalizeContext(context: OperationalContextDto): OperationalContext {
   };
 }
 
+function normalizeCashStatus(status?: string) {
+  return status === 'CERRADA' ? 'CERRADA' : 'ABIERTA';
+}
+
+export function normalizeCashBox(cash: CashBoxDto): CashSession {
+  return {
+    id: String(cash.id),
+    operationalContextId: String(cash.operationalContextId),
+    operationalContextName: cash.operationalContextName,
+    openingAmount: Number(cash.openingAmount ?? 0),
+    totalSales: Number(cash.totalSales ?? 0),
+    additionalIncome: Number(cash.additionalIncome ?? 0),
+    totalExpenses: Number(cash.totalExpenses ?? 0),
+    expectedAmount: Number(cash.expectedAmount ?? 0),
+    countedAmount: cash.countedAmount ?? null,
+    differenceAmount: cash.differenceAmount ?? null,
+    openingObservation: cash.openingObservation,
+    closingObservation: cash.closingObservation,
+    openedAt: cash.openedAt,
+    closedAt: cash.closedAt,
+    closedByUsername: cash.closedByUsername,
+    openedByUsername: cash.openedByUsername,
+    status: normalizeCashStatus(cash.status),
+    movements: (cash.movements ?? []).map((movement) => ({
+      id: String(movement.id),
+      movementType: movement.movementType,
+      amount: Number(movement.amount ?? 0),
+      referenceType: movement.referenceType,
+      referenceId: movement.referenceId,
+      performedBy: movement.performedBy,
+      occurredAt: movement.occurredAt,
+      observation: movement.observation,
+    })),
+  };
+}
+
 export const useOperationalStore = create<OperationalState>()(
   persist(
     (set) => ({
@@ -61,18 +121,8 @@ export const useOperationalStore = create<OperationalState>()(
         }),
       setActiveContext: (context) => set({ activeContext: context }),
       setActiveCash: (cash) => set({ activeCash: cash }),
-      openDemoCash: () =>
-        set({
-          activeCash: {
-            id: 'cash-001',
-            openingAmount: 250,
-            status: 'open',
-          },
-        }),
-      closeDemoCash: () =>
-        set((state) => ({
-          activeCash: state.activeCash ? { ...state.activeCash, status: 'closed' } : null,
-        })),
+      openDemoCash: () => set({ activeCash: null }),
+      closeDemoCash: () => set({ activeCash: null }),
       clearOperationalState: () => set({ availableContexts: [], activeContext: null, activeCash: null }),
     }),
     {

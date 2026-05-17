@@ -4,6 +4,7 @@ import { AuthLayout } from '../layouts/AuthLayout';
 import { OperationalLayout } from '../layouts/OperationalLayout';
 import { ReportsLayout } from '../layouts/ReportsLayout';
 import { LoginPage } from '../modules/auth/pages/LoginPage';
+import { PostLoginLandingPage } from '../modules/auth/pages/PostLoginLandingPage';
 import { ActiveCashSummaryPage } from '../modules/cajas/pages/ActiveCashSummaryPage';
 import { CashClosingPage } from '../modules/cajas/pages/CashClosingPage';
 import { CashOpeningPage } from '../modules/cajas/pages/CashOpeningPage';
@@ -18,46 +19,12 @@ import { RolesPage } from '../modules/roles-permisos/pages/RolesPage';
 import { StockPage } from '../modules/stock/pages/StockPage';
 import { UsersPage } from '../modules/usuarios/pages/UsersPage';
 import { SalesPage } from '../modules/ventas/pages/SalesPage';
-import { useAuthStore } from '../store/auth-store';
 import { useOperationalStore } from '../store/operational-store';
 import { AuthGuard } from './guards/AuthGuard';
 import { GuestGuard } from './guards/GuestGuard';
 import { OpenCashGuard } from './guards/OpenCashGuard';
 import { OperationalContextGuard } from './guards/OperationalContextGuard';
 import { PermissionGuard } from './guards/PermissionGuard';
-
-function HomeRedirect() {
-  const user = useAuthStore((state) => state.user);
-  const hasPermission = useAuthStore((state) => state.hasPermission);
-  const activeContext = useOperationalStore((state) => state.activeContext);
-  const activeCash = useOperationalStore((state) => state.activeCash);
-
-  if (!activeContext) {
-    return <Navigate replace to="/contexto" />;
-  }
-
-  if (user?.role === 'Administrador' && hasPermission('producto.ver')) {
-    return <Navigate replace to={activeContext ? '/admin/productos' : '/contexto'} />;
-  }
-
-  if (hasPermission('venta.registrar') && (!activeCash || activeCash.status !== 'open')) {
-    return <Navigate replace to="/caja/apertura" />;
-  }
-
-  if (hasPermission('venta.registrar') || hasPermission('caja.cerrar')) {
-    return <Navigate replace to="/caja/activa" />;
-  }
-
-  if (hasPermission('compra.registrar')) {
-    return <Navigate replace to="/compras/nueva" />;
-  }
-
-  if (hasPermission('stock.consultar')) {
-    return <Navigate replace to="/stock" />;
-  }
-
-  return <Navigate replace to="/sin-permiso" />;
-}
 
 function AccessDeniedPage() {
   return (
@@ -77,15 +44,15 @@ export function AppRouter() {
     <Routes>
       <Route element={<GuestGuard />}>
         <Route element={<AuthLayout />}>
-          <Route index element={<Navigate replace to="/login" />} />
           <Route path="/login" element={<LoginPage />} />
         </Route>
       </Route>
 
       <Route element={<AuthGuard />}>
-        <Route path="/" element={<HomeRedirect />} />
+        <Route path="/" element={<Navigate replace to="/inicio" />} />
 
         <Route element={<OperationalLayout />}>
+          <Route path="/inicio" element={<PostLoginLandingPage />} />
           <Route path="/sin-permiso" element={<AccessDeniedPage />} />
           <Route path="/contexto" element={<ContextSelectionPage />} />
 

@@ -60,7 +60,7 @@ export function OperationalLayout() {
     { to: '/egresos/nuevo', label: 'Egresos', visible: hasPermission('egreso.registrar') },
     { to: '/compras/nueva', label: 'Compras', visible: hasPermission('compra.registrar') },
     { to: '/stock', label: 'Stock', visible: hasPermission('stock.consultar') },
-    { to: '/reportes', label: 'Reportes', visible: hasPermission('reporte.ver') },
+    { to: '/reportes', label: 'Reportes', visible: hasPermission('auditoria.consultar') || hasPermission('reporte.ver') },
   ].filter((item) => item.visible);
 
   return (

@@ -8,8 +8,8 @@ export function ReportsLayout() {
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-brand-700">Reportes</p>
           <h1 className="text-3xl font-semibold text-slate-900">Centro de consulta y exportacion</h1>
           <p className="max-w-3xl text-sm leading-6 text-slate-600">
-            Layout reservado para filtros, tablas y exportaciones una vez que el backend publique los contratos
-            oficiales del modulo de reportes.
+            Este layout ya concentra el primer bloque real de consulta: auditoria operativa y validacion tecnica
+            del backend, dejando base para reportes funcionales posteriores.
           </p>
         </header>
         <Outlet />

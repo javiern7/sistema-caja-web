@@ -102,7 +102,7 @@ export function AppRouter() {
         </Route>
 
         <Route element={<ReportsLayout />}>
-          <Route element={<PermissionGuard permission="reporte.ver" />}>
+          <Route element={<PermissionGuard permission="auditoria.consultar" />}>
             <Route path="/reportes" element={<ReportsHomePage />} />
           </Route>
         </Route>

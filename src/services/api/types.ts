@@ -367,3 +367,21 @@ export type ExpenseDto = {
   expenseDate: string;
   createdAt?: string;
 };
+
+export type AuditOperationDto = {
+  id: string | number;
+  module: string;
+  operationType: string;
+  entityType: string;
+  entityId: string;
+  username: string;
+  occurredAt?: string;
+  detail?: string;
+};
+
+export type SystemHealthDto = {
+  status: string;
+  application: string;
+  profiles: string[];
+  timestamp: string;
+};

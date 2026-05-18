@@ -7,6 +7,7 @@ import { LoginPage } from '../modules/auth/pages/LoginPage';
 import { PostLoginLandingPage } from '../modules/auth/pages/PostLoginLandingPage';
 import { ActiveCashSummaryPage } from '../modules/cajas/pages/ActiveCashSummaryPage';
 import { CashClosingPage } from '../modules/cajas/pages/CashClosingPage';
+import { CashHistoryPage } from '../modules/cajas/pages/CashHistoryPage';
 import { CashOpeningPage } from '../modules/cajas/pages/CashOpeningPage';
 import { PurchasePage } from '../modules/compras/pages/PurchasePage';
 import { ContextSelectionPage } from '../modules/contexto-operativo/pages/ContextSelectionPage';
@@ -58,6 +59,7 @@ export function AppRouter() {
 
           <Route element={<OperationalContextGuard />}>
             <Route path="/caja/apertura" element={<CashOpeningPage />} />
+            <Route path="/caja/historial" element={<CashHistoryPage />} />
 
             <Route element={<OpenCashGuard />}>
               <Route path="/caja/activa" element={<ActiveCashSummaryPage />} />

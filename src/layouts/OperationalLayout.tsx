@@ -55,6 +55,7 @@ export function OperationalLayout() {
     { to: '/contexto', label: 'Contexto', visible: true },
     { to: '/caja/apertura', label: 'Apertura', visible: hasPermission('caja.abrir') },
     { to: '/caja/activa', label: 'Caja activa', visible: true },
+    { to: '/caja/historial', label: 'Historial cajas', visible: Boolean(activeContext) },
     { to: '/ventas/nueva', label: 'Venta rapida', visible: hasPermission('venta.registrar') },
     { to: '/egresos/nuevo', label: 'Egresos', visible: hasPermission('egreso.registrar') },
     { to: '/compras/nueva', label: 'Compras', visible: hasPermission('compra.registrar') },

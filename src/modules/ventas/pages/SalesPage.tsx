@@ -1,15 +1,18 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFieldArray, useForm } from 'react-hook-form';
+import { useState } from 'react';
 import { z } from 'zod';
 import { MetricCard } from '../../../components/ui/MetricCard';
 import { ResourcePageShell } from '../../../components/ui/ResourcePageShell';
 import { ResourceState } from '../../../components/ui/ResourceState';
 import { ResourceTable } from '../../../components/ui/ResourceTable';
+import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { getApiErrorMessage } from '../../../services/api/errors';
 import type { CreateSaleRequest, SaleDto } from '../../../services/api/types';
 import { fetchProducts } from '../../../services/catalogs/catalogs-api';
-import { createSale, fetchSales } from '../../../services/sales/sales-api';
+import { cancelSale, createSale, fetchSaleDetail, fetchSales } from '../../../services/sales/sales-api';
+import { useAuthStore } from '../../../store/auth-store';
 import { useOperationalStore } from '../../../store/operational-store';
 import { formatCurrency, formatDateTime } from '../../../utils/format';
 
@@ -34,7 +37,12 @@ const saleSchema = z.object({
   observation: z.string().optional(),
 });
 
+const cancelSaleSchema = z.object({
+  reason: z.string().min(3, 'Ingresa un motivo de anulacion.'),
+});
+
 type SaleFormValues = z.infer<typeof saleSchema>;
+type CancelSaleFormValues = z.infer<typeof cancelSaleSchema>;
 
 const inputClass =
   'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-500';
@@ -43,8 +51,10 @@ const paymentMethodOptions = ['EFECTIVO', 'YAPE', 'PLIN', 'TRANSFERENCIA', 'TARJ
 
 export function SalesPage() {
   const queryClient = useQueryClient();
+  const hasPermission = useAuthStore((state) => state.hasPermission);
   const activeContext = useOperationalStore((state) => state.activeContext);
   const activeCash = useOperationalStore((state) => state.activeCash);
+  const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
 
   const productsQuery = useQuery({
     queryKey: ['admin', 'productos'],
@@ -55,6 +65,13 @@ export function SalesPage() {
   const salesQuery = useQuery({
     queryKey: ['sales'],
     queryFn: fetchSales,
+    retry: false,
+  });
+
+  const saleDetailQuery = useQuery({
+    queryKey: ['sales', 'detail', selectedSaleId],
+    queryFn: () => fetchSaleDetail(Number(selectedSaleId)),
+    enabled: Boolean(selectedSaleId),
     retry: false,
   });
 
@@ -72,6 +89,11 @@ export function SalesPage() {
       payments: [{ paymentMethod: 'EFECTIVO', amount: 0 }],
       observation: '',
     },
+  });
+
+  const cancelForm = useForm<CancelSaleFormValues>({
+    resolver: zodResolver(cancelSaleSchema),
+    defaultValues: { reason: '' },
   });
 
   const itemsFieldArray = useFieldArray({ control, name: 'items' });
@@ -98,6 +120,17 @@ export function SalesPage() {
     },
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: (values: CancelSaleFormValues) => cancelSale(Number(selectedSaleId), values),
+    onSuccess: (sale) => {
+      cancelForm.reset({ reason: '' });
+      queryClient.setQueryData(['sales', 'detail', selectedSaleId], sale);
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['cash-box', 'summary'] });
+      queryClient.invalidateQueries({ queryKey: ['stock'] });
+    },
+  });
+
   if (!activeContext || !activeCash) {
     return (
       <ResourceState
@@ -110,12 +143,13 @@ export function SalesPage() {
 
   const products = (productsQuery.data ?? []).filter((product) => product.active);
   const sales = salesQuery.data ?? [];
+  const selectedSale = saleDetailQuery.data ?? sales.find((sale) => String(sale.id) === selectedSaleId) ?? null;
 
   return (
     <ResourcePageShell
       badge="FE-VTA-001 Venta real"
-      description="Pantalla conectada a `GET /api/v1/ventas` y `POST /api/v1/ventas` usando caja activa, items y pagos reales contra backend."
-      documents={['04 - HU-VTA-001', '18 - API-VTA-001/API-VTA-002', '26 - Frontend Fase operativa']}
+      description="Pantalla conectada a `GET /api/v1/ventas`, `GET /api/v1/ventas/{saleId}` y `POST /api/v1/ventas/{saleId}/anulacion` usando caja activa, items y pagos reales contra backend."
+      documents={['04 - HU-VTA-001', '18 - API-VTA-001/API-VTA-002/API-VTA-003', '26 - Frontend Fase operativa']}
       summary={
         <div className="grid gap-4 md:grid-cols-4">
           <MetricCard helper="Caja que recibira la venta." label="Caja activa" value={String(activeCash.id)} />
@@ -252,43 +286,148 @@ export function SalesPage() {
       ) : null}
 
       {!salesQuery.isLoading && !salesQuery.isError ? (
-        <ResourceTable<SaleDto>
-          columns={[
-            {
-              key: 'receipt',
-              header: 'Comprobante',
-              render: (sale) => (
-                <div>
-                  <p className="font-medium text-slate-900">{`${sale.internalReceiptSeries ?? 'INT'}-${sale.internalReceiptNumber ?? sale.id}`}</p>
-                  <p className="text-xs text-slate-500">{sale.operationalContextName ?? activeContext.name}</p>
+        <>
+          <ResourceTable<SaleDto>
+            columns={[
+              {
+                key: 'receipt',
+                header: 'Comprobante',
+                render: (sale) => (
+                  <button className="text-left" onClick={() => setSelectedSaleId(String(sale.id))} type="button">
+                    <p className="font-medium text-slate-900">{`${sale.internalReceiptSeries ?? 'INT'}-${sale.internalReceiptNumber ?? sale.id}`}</p>
+                    <p className="text-xs text-slate-500">{sale.operationalContextName ?? activeContext.name}</p>
+                  </button>
+                ),
+              },
+              {
+                key: 'status',
+                header: 'Estado',
+                render: (sale) => <StatusBadge label={sale.status} tone={sale.status === 'ANULADA' ? 'warning' : 'success'} />,
+              },
+              { key: 'total', header: 'Total', render: (sale) => formatCurrency(sale.totalAmount) },
+              {
+                key: 'items',
+                header: 'Items',
+                render: (sale) => `${sale.items.length} item(s)`,
+              },
+              {
+                key: 'audit',
+                header: 'Registrada',
+                render: (sale) => (
+                  <div>
+                    <p>{sale.soldByUsername ?? 'No disponible'}</p>
+                    <p className="text-xs text-slate-500">{formatDateTime(sale.createdAt)}</p>
+                  </div>
+                ),
+              },
+            ]}
+            rowKey={(sale) => String(sale.id)}
+            rows={sales}
+          />
+
+          {selectedSale ? (
+            <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+              <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-950">Detalle de venta #{selectedSale.id}</h2>
+                    <p className="mt-1 text-sm text-slate-600">{selectedSale.operationalContextName ?? activeContext.name}</p>
+                  </div>
+                  <StatusBadge label={selectedSale.status} tone={selectedSale.status === 'ANULADA' ? 'warning' : 'success'} />
                 </div>
-              ),
-            },
-            {
-              key: 'status',
-              header: 'Estado',
-              render: (sale) => sale.status,
-            },
-            { key: 'total', header: 'Total', render: (sale) => formatCurrency(sale.totalAmount) },
-            {
-              key: 'items',
-              header: 'Items',
-              render: (sale) => `${sale.items.length} item(s)`,
-            },
-            {
-              key: 'audit',
-              header: 'Registrada',
-              render: (sale) => (
-                <div>
-                  <p>{sale.soldByUsername ?? 'No disponible'}</p>
-                  <p className="text-xs text-slate-500">{formatDateTime(sale.createdAt)}</p>
+
+                {saleDetailQuery.isLoading ? <p className="mt-4 text-sm text-slate-600">Cargando detalle...</p> : null}
+                {saleDetailQuery.isError ? (
+                  <div className="mt-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    {getApiErrorMessage(saleDetailQuery.error, 'No se pudo cargar el detalle de la venta.')}
+                  </div>
+                ) : null}
+
+                <div className="mt-5 grid gap-4 md:grid-cols-2">
+                  <MetricCard helper="Subtotal informado por backend." label="Subtotal" value={formatCurrency(selectedSale.subtotalAmount)} />
+                  <MetricCard helper="Total de la venta." label="Total" value={formatCurrency(selectedSale.totalAmount)} />
+                  <MetricCard helper="Caja asociada a la operacion." label="Caja" value={String(selectedSale.cashBoxId)} />
+                  <MetricCard helper="Fecha real de registro." label="Creada" value={formatDateTime(selectedSale.createdAt)} />
                 </div>
-              ),
-            },
-          ]}
-          rowKey={(sale) => String(sale.id)}
-          rows={sales}
-        />
+
+                <div className="mt-6 space-y-4">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">Items</p>
+                    <div className="mt-3 space-y-3">
+                      {selectedSale.items.map((item) => (
+                        <div key={String(item.id)} className="rounded-2xl border border-slate-200 px-4 py-3">
+                          <div className="flex items-center justify-between gap-4">
+                            <p className="font-medium text-slate-900">{item.productName}</p>
+                            <p className="text-sm text-slate-600">{formatCurrency(item.subtotalAmount)}</p>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-500">{item.productCode} - {item.quantity} x {formatCurrency(item.unitPrice)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">Pagos</p>
+                    <div className="mt-3 space-y-3">
+                      {selectedSale.payments.map((payment) => (
+                        <div key={String(payment.id)} className="rounded-2xl border border-slate-200 px-4 py-3">
+                          <div className="flex items-center justify-between gap-4">
+                            <p className="font-medium text-slate-900">{payment.paymentMethod}</p>
+                            <p className="text-sm text-slate-600">{formatCurrency(payment.amount)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="text-sm text-slate-600">
+                    <p><span className="font-medium text-slate-900">Observacion:</span> {selectedSale.observation ?? 'Sin observacion'}</p>
+                    <p><span className="font-medium text-slate-900">Motivo de anulacion:</span> {selectedSale.cancellationReason ?? 'No aplica'}</p>
+                  </div>
+                </div>
+              </article>
+
+              <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
+                <h2 className="text-lg font-semibold text-slate-950">Anulacion de venta</h2>
+                <p className="mt-2 text-sm text-slate-600">Disponible solo si la sesion tiene permiso `venta.anular` y la venta aun no fue anulada.</p>
+
+                {!hasPermission('venta.anular') ? (
+                  <div className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                    Tu sesion no tiene permiso para anular ventas.
+                  </div>
+                ) : null}
+
+                <form className="mt-5 space-y-4" onSubmit={cancelForm.handleSubmit((values) => cancelMutation.mutate(values))}>
+                  <label className="space-y-2">
+                    <span className="text-sm font-medium text-slate-700">Motivo</span>
+                    <textarea className={`${inputClass} min-h-28`} {...cancelForm.register('reason')} />
+                    {cancelForm.formState.errors.reason ? (
+                      <span className="text-xs text-rose-600">{cancelForm.formState.errors.reason.message}</span>
+                    ) : null}
+                  </label>
+
+                  {cancelMutation.isError ? (
+                    <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                      {getApiErrorMessage(cancelMutation.error, 'No se pudo anular la venta.')}
+                    </div>
+                  ) : null}
+
+                  {cancelMutation.isSuccess ? (
+                    <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Venta anulada correctamente.</div>
+                  ) : null}
+
+                  <button
+                    className="w-full rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-400"
+                    disabled={!hasPermission('venta.anular') || selectedSale.status === 'ANULADA' || cancelMutation.isPending}
+                    type="submit"
+                  >
+                    {cancelMutation.isPending ? 'Anulando venta...' : 'Anular venta'}
+                  </button>
+                </form>
+              </article>
+            </section>
+          ) : null}
+        </>
       ) : null}
     </ResourcePageShell>
   );

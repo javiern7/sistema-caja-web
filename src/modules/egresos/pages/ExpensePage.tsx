@@ -1,14 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
+import { useState } from 'react';
 import { z } from 'zod';
 import { MetricCard } from '../../../components/ui/MetricCard';
 import { ResourcePageShell } from '../../../components/ui/ResourcePageShell';
 import { ResourceState } from '../../../components/ui/ResourceState';
 import { ResourceTable } from '../../../components/ui/ResourceTable';
+import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { getApiErrorMessage } from '../../../services/api/errors';
 import type { CreateExpenseRequest, ExpenseDto } from '../../../services/api/types';
-import { createExpense, fetchExpenses } from '../../../services/expenses/expenses-api';
+import { createExpense, fetchExpenseDetail, fetchExpenses } from '../../../services/expenses/expenses-api';
 import { useOperationalStore } from '../../../store/operational-store';
 import { formatCurrency, formatDate, formatDateTime } from '../../../utils/format';
 
@@ -32,10 +34,18 @@ export function ExpensePage() {
   const queryClient = useQueryClient();
   const activeContext = useOperationalStore((state) => state.activeContext);
   const activeCash = useOperationalStore((state) => state.activeCash);
+  const [selectedExpenseId, setSelectedExpenseId] = useState<string | null>(null);
 
   const expensesQuery = useQuery({
     queryKey: ['expenses'],
     queryFn: fetchExpenses,
+    retry: false,
+  });
+
+  const expenseDetailQuery = useQuery({
+    queryKey: ['expenses', 'detail', selectedExpenseId],
+    queryFn: () => fetchExpenseDetail(Number(selectedExpenseId)),
+    enabled: Boolean(selectedExpenseId),
     retry: false,
   });
 
@@ -47,7 +57,7 @@ export function ExpensePage() {
   } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseSchema),
     defaultValues: {
-      expenseType: 'OPERATIVO',
+      expenseType: 'ADMINISTRATIVO',
       category: '',
       description: '',
       paymentMethod: 'EFECTIVO',
@@ -62,7 +72,7 @@ export function ExpensePage() {
     mutationFn: (payload: CreateExpenseRequest) => createExpense(payload),
     onSuccess: () => {
       reset({
-        expenseType: 'OPERATIVO',
+        expenseType: 'ADMINISTRATIVO',
         category: '',
         description: '',
         paymentMethod: 'EFECTIVO',
@@ -81,11 +91,12 @@ export function ExpensePage() {
   }
 
   const expenses = expensesQuery.data ?? [];
+  const selectedExpense = expenseDetailQuery.data ?? expenses.find((expense) => String(expense.id) === selectedExpenseId) ?? null;
 
   return (
     <ResourcePageShell
       badge="FE-EGR-001 Egreso real"
-      description="Pantalla conectada a `GET /api/v1/egresos` y `POST /api/v1/egresos` para registrar salidas reales vinculadas al contexto y, cuando exista, a la caja activa."
+      description="Pantalla conectada a `GET /api/v1/egresos`, `GET /api/v1/egresos/{expenseId}` y `POST /api/v1/egresos` para registrar y revisar egresos reales."
       documents={['04 - HU-EGR-001', '18 - API-EGR-001/API-EGR-002', '26 - Frontend Fase operativa']}
       summary={
         <div className="grid gap-4 md:grid-cols-4">
@@ -126,7 +137,10 @@ export function ExpensePage() {
         >
           <label className="space-y-2">
             <span className="text-sm font-medium text-slate-700">Tipo de egreso</span>
-            <input className={inputClass} {...register('expenseType')} />
+            <select className={inputClass} {...register('expenseType')}>
+              <option value="ADMINISTRATIVO">ADMINISTRATIVO</option>
+              <option value="CAJA">CAJA</option>
+            </select>
             {errors.expenseType ? <span className="text-xs text-rose-600">{errors.expenseType.message}</span> : null}
           </label>
           <label className="space-y-2">
@@ -194,43 +208,90 @@ export function ExpensePage() {
       ) : null}
 
       {!expensesQuery.isLoading && !expensesQuery.isError ? (
-        <ResourceTable<ExpenseDto>
-          columns={[
-            {
-              key: 'type',
-              header: 'Tipo / categoria',
-              render: (expense) => (
+        <>
+          <ResourceTable<ExpenseDto>
+            columns={[
+              {
+                key: 'type',
+                header: 'Tipo / categoria',
+                render: (expense) => (
+                  <button className="text-left" onClick={() => setSelectedExpenseId(String(expense.id))} type="button">
+                    <p className="font-medium text-slate-900">{expense.expenseType}</p>
+                    <p className="text-xs text-slate-500">{expense.category}</p>
+                  </button>
+                ),
+              },
+              {
+                key: 'description',
+                header: 'Descripcion',
+                render: (expense) => (
+                  <div>
+                    <p>{expense.description}</p>
+                    <p className="text-xs text-slate-500">{expense.observation ?? 'Sin observacion'}</p>
+                  </div>
+                ),
+              },
+              { key: 'amount', header: 'Monto', render: (expense) => formatCurrency(expense.amount) },
+              {
+                key: 'audit',
+                header: 'Fecha / usuario',
+                render: (expense) => (
+                  <div>
+                    <p>{formatDate(expense.expenseDate)}</p>
+                    <p className="text-xs text-slate-500">{expense.recordedByUsername ?? 'No disponible'} - {formatDateTime(expense.createdAt)}</p>
+                  </div>
+                ),
+              },
+            ]}
+            rowKey={(expense) => String(expense.id)}
+            rows={expenses}
+          />
+
+          {selectedExpense ? (
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
+              <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="font-medium text-slate-900">{expense.expenseType}</p>
-                  <p className="text-xs text-slate-500">{expense.category}</p>
+                  <h2 className="text-lg font-semibold text-slate-950">Detalle de egreso #{selectedExpense.id}</h2>
+                  <p className="mt-1 text-sm text-slate-600">{selectedExpense.operationalContextName ?? activeContext.name}</p>
                 </div>
-              ),
-            },
-            {
-              key: 'description',
-              header: 'Descripcion',
-              render: (expense) => (
-                <div>
-                  <p>{expense.description}</p>
-                  <p className="text-xs text-slate-500">{expense.observation ?? 'Sin observacion'}</p>
+                <StatusBadge label={selectedExpense.expenseType} tone="neutral" />
+              </div>
+
+              {expenseDetailQuery.isLoading ? <p className="mt-4 text-sm text-slate-600">Cargando detalle...</p> : null}
+              {expenseDetailQuery.isError ? (
+                <div className="mt-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  {getApiErrorMessage(expenseDetailQuery.error, 'No se pudo cargar el detalle del egreso.')}
                 </div>
-              ),
-            },
-            { key: 'amount', header: 'Monto', render: (expense) => formatCurrency(expense.amount) },
-            {
-              key: 'audit',
-              header: 'Fecha / usuario',
-              render: (expense) => (
-                <div>
-                  <p>{formatDate(expense.expenseDate)}</p>
-                  <p className="text-xs text-slate-500">{expense.recordedByUsername ?? 'No disponible'} - {formatDateTime(expense.createdAt)}</p>
+              ) : null}
+
+              <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <MetricCard helper="Monto reportado por backend." label="Monto" value={formatCurrency(selectedExpense.amount)} />
+                <MetricCard helper="Caja vinculada si aplica." label="Caja" value={selectedExpense.cashBoxId ? String(selectedExpense.cashBoxId) : 'Sin caja'} />
+                <MetricCard helper="Fecha efectiva del egreso." label="Fecha" value={formatDate(selectedExpense.expenseDate)} />
+                <MetricCard helper="Registro de sistema." label="Creado" value={formatDateTime(selectedExpense.createdAt)} />
+              </div>
+
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <p className="text-sm font-semibold text-slate-900">Descripcion</p>
+                  <p className="mt-2 text-sm text-slate-600">{selectedExpense.description}</p>
                 </div>
-              ),
-            },
-          ]}
-          rowKey={(expense) => String(expense.id)}
-          rows={expenses}
-        />
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <p className="text-sm font-semibold text-slate-900">Observacion</p>
+                  <p className="mt-2 text-sm text-slate-600">{selectedExpense.observation ?? 'Sin observacion registrada.'}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <p className="text-sm font-semibold text-slate-900">Responsable</p>
+                  <p className="mt-2 text-sm text-slate-600">{selectedExpense.responsible ?? 'No definido'}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <p className="text-sm font-semibold text-slate-900">Metodo de pago</p>
+                  <p className="mt-2 text-sm text-slate-600">{selectedExpense.paymentMethod ?? 'No definido'}</p>
+                </div>
+              </div>
+            </section>
+          ) : null}
+        </>
       ) : null}
     </ResourcePageShell>
   );

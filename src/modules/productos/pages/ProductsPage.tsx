@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -9,7 +10,7 @@ import { ResourceTable } from '../../../components/ui/ResourceTable';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { getApiErrorMessage } from '../../../services/api/errors';
 import type { CreateProductRequest, ProductDto } from '../../../services/api/types';
-import { createProduct, fetchProducts } from '../../../services/catalogs/catalogs-api';
+import { createProduct, fetchProducts, updateProduct, updateProductStatus } from '../../../services/catalogs/catalogs-api';
 
 const productSchema = z.object({
   code: z.string().min(1, 'Ingresa el codigo.'),
@@ -30,18 +31,29 @@ const inputClass =
 
 export function ProductsPage() {
   const queryClient = useQueryClient();
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const productsQuery = useQuery({
     queryKey: ['admin', 'productos'],
     queryFn: fetchProducts,
     retry: false,
   });
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<ProductFormValues>({
+  const createForm = useForm<ProductFormValues>({
+    resolver: zodResolver(productSchema),
+    defaultValues: {
+      code: '',
+      name: '',
+      unitOfMeasure: 'UND',
+      salePrice: 0,
+      referenceCost: 0,
+      minimumStock: 0,
+      stockControlled: true,
+      active: true,
+      description: '',
+    },
+  });
+
+  const editForm = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: {
       code: '',
@@ -59,20 +71,53 @@ export function ProductsPage() {
   const createMutation = useMutation({
     mutationFn: (values: CreateProductRequest) => createProduct(values),
     onSuccess: () => {
-      reset();
+      createForm.reset();
+      queryClient.invalidateQueries({ queryKey: ['admin', 'productos'] });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (values: CreateProductRequest) => updateProduct(Number(selectedProductId), values),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'productos'] });
+    },
+  });
+
+  const toggleStatusMutation = useMutation({
+    mutationFn: ({ productId, active }: { productId: number; active: boolean }) => updateProductStatus(productId, active),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'productos'] });
     },
   });
 
   const products = productsQuery.data ?? [];
+  const selectedProduct = products.find((product) => String(product.id) === selectedProductId) ?? null;
   const activeProducts = products.filter((product) => product.active).length;
   const stockControlledProducts = products.filter((product) => product.stockControlled).length;
+
+  useEffect(() => {
+    if (!selectedProduct) {
+      return;
+    }
+
+    editForm.reset({
+      code: selectedProduct.code,
+      name: selectedProduct.name,
+      unitOfMeasure: selectedProduct.unitOfMeasure,
+      salePrice: Number(selectedProduct.salePrice),
+      referenceCost: Number(selectedProduct.referenceCost),
+      minimumStock: Number(selectedProduct.minimumStock),
+      stockControlled: selectedProduct.stockControlled,
+      active: selectedProduct.active,
+      description: selectedProduct.description ?? '',
+    });
+  }, [editForm, selectedProduct]);
 
   return (
     <ResourcePageShell
       badge="FE-PRO-001 Productos"
-      description="Vista conectada al endpoint `GET /api/v1/productos` y `POST /api/v1/productos` para validar catalogo operativo y registro administrativo real."
-      documents={['04 - HU-PRO-001', '18 - API-PRO-001/API-PRO-002', '21 - Convenciones frontend por modulos']}
+      description="Vista conectada a `GET`, `POST`, `PUT` y `PATCH` de productos para validar catalogo, edicion y cambio de estado real."
+      documents={['04 - HU-PRO-001', '18 - API-PRO-001/API-PRO-002/API-PRO-003', '21 - Convenciones frontend por modulos']}
       summary={
         <div className="grid gap-4 md:grid-cols-3">
           <MetricCard helper="Respuesta real del backend local." label="Productos cargados" value={String(products.length)} />
@@ -88,47 +133,43 @@ export function ProductsPage() {
           <p className="mt-2 text-sm text-slate-600">Formulario alineado al contrato `CreateProductRequest` del backend.</p>
         </div>
 
-        <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit((values) => createMutation.mutate(values))}>
+        <form className="grid gap-4 md:grid-cols-2" onSubmit={createForm.handleSubmit((values) => createMutation.mutate(values))}>
           <label className="space-y-2">
             <span className="text-sm font-medium text-slate-700">Codigo</span>
-            <input className={inputClass} {...register('code')} />
-            {errors.code ? <span className="text-xs text-rose-600">{errors.code.message}</span> : null}
+            <input className={inputClass} {...createForm.register('code')} />
+            {createForm.formState.errors.code ? <span className="text-xs text-rose-600">{createForm.formState.errors.code.message}</span> : null}
           </label>
           <label className="space-y-2">
             <span className="text-sm font-medium text-slate-700">Nombre</span>
-            <input className={inputClass} {...register('name')} />
-            {errors.name ? <span className="text-xs text-rose-600">{errors.name.message}</span> : null}
+            <input className={inputClass} {...createForm.register('name')} />
+            {createForm.formState.errors.name ? <span className="text-xs text-rose-600">{createForm.formState.errors.name.message}</span> : null}
           </label>
           <label className="space-y-2">
             <span className="text-sm font-medium text-slate-700">Unidad de medida</span>
-            <input className={inputClass} {...register('unitOfMeasure')} />
-            {errors.unitOfMeasure ? <span className="text-xs text-rose-600">{errors.unitOfMeasure.message}</span> : null}
+            <input className={inputClass} {...createForm.register('unitOfMeasure')} />
           </label>
           <label className="space-y-2">
             <span className="text-sm font-medium text-slate-700">Precio de venta</span>
-            <input className={inputClass} step="0.01" type="number" {...register('salePrice')} />
-            {errors.salePrice ? <span className="text-xs text-rose-600">{errors.salePrice.message}</span> : null}
+            <input className={inputClass} step="0.01" type="number" {...createForm.register('salePrice')} />
           </label>
           <label className="space-y-2">
             <span className="text-sm font-medium text-slate-700">Costo referencial</span>
-            <input className={inputClass} step="0.01" type="number" {...register('referenceCost')} />
-            {errors.referenceCost ? <span className="text-xs text-rose-600">{errors.referenceCost.message}</span> : null}
+            <input className={inputClass} step="0.01" type="number" {...createForm.register('referenceCost')} />
           </label>
           <label className="space-y-2">
             <span className="text-sm font-medium text-slate-700">Stock minimo</span>
-            <input className={inputClass} step="0.01" type="number" {...register('minimumStock')} />
-            {errors.minimumStock ? <span className="text-xs text-rose-600">{errors.minimumStock.message}</span> : null}
+            <input className={inputClass} step="0.01" type="number" {...createForm.register('minimumStock')} />
           </label>
           <label className="space-y-2 md:col-span-2">
             <span className="text-sm font-medium text-slate-700">Descripcion</span>
-            <textarea className={`${inputClass} min-h-24`} {...register('description')} />
+            <textarea className={`${inputClass} min-h-24`} {...createForm.register('description')} />
           </label>
           <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3">
-            <input type="checkbox" {...register('stockControlled')} />
+            <input type="checkbox" {...createForm.register('stockControlled')} />
             <span className="text-sm text-slate-700">Controla stock</span>
           </label>
           <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3">
-            <input type="checkbox" {...register('active')} />
+            <input type="checkbox" {...createForm.register('active')} />
             <span className="text-sm text-slate-700">Activo</span>
           </label>
           <div className="md:col-span-2">
@@ -140,11 +181,7 @@ export function ProductsPage() {
             {createMutation.isSuccess ? (
               <div className="mb-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Producto registrado correctamente.</div>
             ) : null}
-            <button
-              className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-400"
-              disabled={createMutation.isPending}
-              type="submit"
-            >
+            <button className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-400" disabled={createMutation.isPending} type="submit">
               {createMutation.isPending ? 'Guardando producto...' : 'Guardar producto'}
             </button>
           </div>
@@ -166,48 +203,116 @@ export function ProductsPage() {
       ) : null}
 
       {!productsQuery.isLoading && !productsQuery.isError && products.length > 0 ? (
-        <ResourceTable<ProductDto>
-          columns={[
-            { key: 'code', header: 'Codigo', render: (product) => <span className="font-medium text-slate-900">{product.code}</span> },
-            {
-              key: 'name',
-              header: 'Producto',
-              render: (product) => (
-                <div>
-                  <p className="font-medium text-slate-900">{product.name}</p>
-                  <p className="text-xs text-slate-500">{product.description ?? 'Sin descripcion registrada'}</p>
+        <>
+          <ResourceTable<ProductDto>
+            columns={[
+              {
+                key: 'code',
+                header: 'Codigo',
+                render: (product) => (
+                  <button className="text-left font-medium text-slate-900" onClick={() => setSelectedProductId(String(product.id))} type="button">
+                    {product.code}
+                  </button>
+                ),
+              },
+              {
+                key: 'name',
+                header: 'Producto',
+                render: (product) => (
+                  <div>
+                    <p className="font-medium text-slate-900">{product.name}</p>
+                    <p className="text-xs text-slate-500">{product.description ?? 'Sin descripcion registrada'}</p>
+                  </div>
+                ),
+              },
+              {
+                key: 'pricing',
+                header: 'Precio / costo',
+                render: (product) => (
+                  <div>
+                    <p>Venta: S/ {Number(product.salePrice).toFixed(2)}</p>
+                    <p className="text-xs text-slate-500">Costo: S/ {Number(product.referenceCost).toFixed(2)}</p>
+                  </div>
+                ),
+              },
+              {
+                key: 'stock',
+                header: 'Stock',
+                render: (product) => (
+                  <div>
+                    <p>Minimo: {Number(product.minimumStock).toFixed(2)}</p>
+                    <StatusBadge label={product.stockControlled ? 'Controlado' : 'Libre'} tone={product.stockControlled ? 'success' : 'neutral'} />
+                  </div>
+                ),
+              },
+              {
+                key: 'status',
+                header: 'Estado',
+                render: (product) => (
+                  <button onClick={() => toggleStatusMutation.mutate({ productId: Number(product.id), active: !product.active })} type="button">
+                    <StatusBadge label={product.active ? 'Activo' : 'Inactivo'} tone={product.active ? 'success' : 'warning'} />
+                  </button>
+                ),
+              },
+            ]}
+            rowKey={(product) => String(product.id)}
+            rows={products}
+          />
+
+          {selectedProduct ? (
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
+              <div className="mb-5">
+                <h2 className="text-lg font-semibold text-slate-950">Editar producto</h2>
+                <p className="mt-2 text-sm text-slate-600">Actualiza el registro seleccionado usando `PUT /api/v1/productos/{'{productId}'}`.</p>
+              </div>
+              <form className="grid gap-4 md:grid-cols-2" onSubmit={editForm.handleSubmit((values) => updateMutation.mutate(values))}>
+                <label className="space-y-2">
+                  <span className="text-sm font-medium text-slate-700">Codigo</span>
+                  <input className={inputClass} {...editForm.register('code')} />
+                </label>
+                <label className="space-y-2">
+                  <span className="text-sm font-medium text-slate-700">Nombre</span>
+                  <input className={inputClass} {...editForm.register('name')} />
+                </label>
+                <label className="space-y-2">
+                  <span className="text-sm font-medium text-slate-700">Unidad de medida</span>
+                  <input className={inputClass} {...editForm.register('unitOfMeasure')} />
+                </label>
+                <label className="space-y-2">
+                  <span className="text-sm font-medium text-slate-700">Precio de venta</span>
+                  <input className={inputClass} step="0.01" type="number" {...editForm.register('salePrice')} />
+                </label>
+                <label className="space-y-2">
+                  <span className="text-sm font-medium text-slate-700">Costo referencial</span>
+                  <input className={inputClass} step="0.01" type="number" {...editForm.register('referenceCost')} />
+                </label>
+                <label className="space-y-2">
+                  <span className="text-sm font-medium text-slate-700">Stock minimo</span>
+                  <input className={inputClass} step="0.01" type="number" {...editForm.register('minimumStock')} />
+                </label>
+                <label className="space-y-2 md:col-span-2">
+                  <span className="text-sm font-medium text-slate-700">Descripcion</span>
+                  <textarea className={`${inputClass} min-h-24`} {...editForm.register('description')} />
+                </label>
+                <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3">
+                  <input type="checkbox" {...editForm.register('stockControlled')} />
+                  <span className="text-sm text-slate-700">Controla stock</span>
+                </label>
+                <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3">
+                  <input type="checkbox" {...editForm.register('active')} />
+                  <span className="text-sm text-slate-700">Activo</span>
+                </label>
+                <div className="md:col-span-2">
+                  {updateMutation.isError ? <div className="mb-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{getApiErrorMessage(updateMutation.error, 'No se pudo actualizar el producto.')}</div> : null}
+                  {updateMutation.isSuccess ? <div className="mb-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Producto actualizado correctamente.</div> : null}
+                  <button className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-400" disabled={updateMutation.isPending} type="submit">
+                    {updateMutation.isPending ? 'Actualizando...' : 'Guardar cambios'}
+                  </button>
                 </div>
-              ),
-            },
-            {
-              key: 'pricing',
-              header: 'Precio / costo',
-              render: (product) => (
-                <div>
-                  <p>Venta: S/ {Number(product.salePrice).toFixed(2)}</p>
-                  <p className="text-xs text-slate-500">Costo: S/ {Number(product.referenceCost).toFixed(2)}</p>
-                </div>
-              ),
-            },
-            {
-              key: 'stock',
-              header: 'Stock',
-              render: (product) => (
-                <div>
-                  <p>Minimo: {Number(product.minimumStock).toFixed(2)}</p>
-                  <StatusBadge label={product.stockControlled ? 'Controlado' : 'Libre'} tone={product.stockControlled ? 'success' : 'neutral'} />
-                </div>
-              ),
-            },
-            {
-              key: 'status',
-              header: 'Estado',
-              render: (product) => <StatusBadge label={product.active ? 'Activo' : 'Inactivo'} tone={product.active ? 'success' : 'warning'} />,
-            },
-          ]}
-          rowKey={(product) => String(product.id)}
-          rows={products}
-        />
+              </form>
+            </section>
+          ) : null}
+        </>
       ) : null}
     </ResourcePageShell>
   );

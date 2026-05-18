@@ -91,6 +91,8 @@ export type CreateProviderRequest = {
   active: boolean;
 };
 
+export type UpdateProviderRequest = CreateProviderRequest;
+
 export type UserDto = {
   id: string | number;
   username: string;
@@ -104,6 +106,13 @@ export type CreateUserRequest = {
   password: string;
   roleId: number;
   active: boolean;
+};
+
+export type UpdateUserRequest = {
+  username: string;
+  password?: string;
+  roleId: number;
+  active?: boolean;
 };
 
 export type RolePermissionDto = {
@@ -124,6 +133,10 @@ export type CreateRoleRequest = {
   permissions: string[];
 };
 
+export type UpdateRolePermissionsRequest = {
+  permissions: string[];
+};
+
 export type CreateOperationalContextRequest = {
   code: string;
   name: string;
@@ -133,6 +146,8 @@ export type CreateOperationalContextRequest = {
   endDate?: string;
   description?: string;
 };
+
+export type UpdateOperationalContextRequest = CreateOperationalContextRequest;
 
 export type CashMovementDto = {
   id: string | number;

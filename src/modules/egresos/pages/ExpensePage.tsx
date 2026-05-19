@@ -53,6 +53,9 @@ export function ExpensePage() {
     register,
     handleSubmit,
     reset,
+    setError,
+    clearErrors,
+    watch,
     formState: { errors },
   } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseSchema),
@@ -92,6 +95,7 @@ export function ExpensePage() {
 
   const expenses = expensesQuery.data ?? [];
   const selectedExpense = expenseDetailQuery.data ?? expenses.find((expense) => String(expense.id) === selectedExpenseId) ?? null;
+  const expenseType = watch('expenseType');
 
   return (
     <ResourcePageShell
@@ -120,7 +124,16 @@ export function ExpensePage() {
 
         <form
           className="grid gap-4 md:grid-cols-2"
-          onSubmit={handleSubmit((values) =>
+          onSubmit={handleSubmit((values) => {
+            if (values.expenseType === 'CAJA' && !activeCash) {
+              setError('expenseType', {
+                type: 'manual',
+                message: 'El backend requiere una caja activa para registrar egresos de tipo CAJA.',
+              });
+              return;
+            }
+
+            clearErrors('expenseType');
             createMutation.mutate({
               operationalContextId: Number(activeContext.id),
               cashBoxId: activeCash ? Number(activeCash.id) : undefined,
@@ -132,14 +145,14 @@ export function ExpensePage() {
               responsible: values.responsible,
               observation: values.observation,
               expenseDate: values.expenseDate,
-            }),
-          )}
+            });
+          })}
         >
           <label className="space-y-2">
             <span className="text-sm font-medium text-slate-700">Tipo de egreso</span>
             <select className={inputClass} {...register('expenseType')}>
               <option value="ADMINISTRATIVO">ADMINISTRATIVO</option>
-              <option value="CAJA">CAJA</option>
+              <option disabled={!activeCash} value="CAJA">CAJA</option>
             </select>
             {errors.expenseType ? <span className="text-xs text-rose-600">{errors.expenseType.message}</span> : null}
           </label>
@@ -174,6 +187,12 @@ export function ExpensePage() {
             <span className="text-sm font-medium text-slate-700">Observacion</span>
             <textarea className={`${inputClass} min-h-24`} {...register('observation')} />
           </label>
+
+          {expenseType === 'CAJA' && !activeCash ? (
+            <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700 md:col-span-2">
+              El backend rechazara un egreso `CAJA` si no existe una caja abierta asociada al contexto.
+            </div>
+          ) : null}
 
           <div className="md:col-span-2">
             {createMutation.isError ? (

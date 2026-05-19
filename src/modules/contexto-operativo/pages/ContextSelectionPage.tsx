@@ -29,9 +29,15 @@ export function ContextSelectionPage() {
 
   const nextRoute = hasPermission('caja.abrir')
     ? '/caja/apertura'
-    : hasPermission('venta.registrar')
-      ? '/ventas/nueva'
-      : '/caja/activa';
+    : hasPermission('caja.cerrar')
+      ? '/caja/historial'
+      : hasPermission('compra.registrar')
+        ? '/compras/nueva'
+        : hasPermission('egreso.registrar')
+          ? '/egresos/nuevo'
+          : hasPermission('stock.consultar')
+            ? '/stock'
+            : '/sin-permiso';
 
   return (
     <PlaceholderPage

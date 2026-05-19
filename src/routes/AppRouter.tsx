@@ -58,14 +58,23 @@ export function AppRouter() {
           <Route path="/contexto" element={<ContextSelectionPage />} />
 
           <Route element={<OperationalContextGuard />}>
-            <Route path="/caja/apertura" element={<CashOpeningPage />} />
-            <Route path="/caja/historial" element={<CashHistoryPage />} />
+            <Route element={<PermissionGuard permission="caja.abrir" />}>
+              <Route path="/caja/apertura" element={<CashOpeningPage />} />
+            </Route>
+            <Route element={<PermissionGuard anyOf={['caja.abrir', 'caja.cerrar']} />}>
+              <Route path="/caja/historial" element={<CashHistoryPage />} />
+            </Route>
+
+            <Route element={<PermissionGuard anyOf={['caja.abrir', 'caja.cerrar']} />}>
+              <Route element={<OpenCashGuard />}>
+                <Route path="/caja/activa" element={<ActiveCashSummaryPage />} />
+                <Route element={<PermissionGuard permission="caja.cerrar" />}>
+                  <Route path="/caja/cierre" element={<CashClosingPage />} />
+                </Route>
+              </Route>
+            </Route>
 
             <Route element={<OpenCashGuard />}>
-              <Route path="/caja/activa" element={<ActiveCashSummaryPage />} />
-              <Route element={<PermissionGuard permission="caja.cerrar" />}>
-                <Route path="/caja/cierre" element={<CashClosingPage />} />
-              </Route>
               <Route element={<PermissionGuard permission="venta.registrar" />}>
                 <Route path="/ventas/nueva" element={<SalesPage />} />
               </Route>
@@ -84,25 +93,41 @@ export function AppRouter() {
         </Route>
 
         <Route element={<AdminLayout />}>
-          <Route element={<PermissionGuard permission="producto.ver" />}>
+          <Route element={<PermissionGuard permission="producto.gestionar" />}>
             <Route path="/admin/productos" element={<ProductsPage />} />
           </Route>
-          <Route element={<PermissionGuard permission="proveedor.ver" />}>
+          <Route element={<PermissionGuard permission="proveedor.gestionar" />}>
             <Route path="/admin/proveedores" element={<ProvidersPage />} />
           </Route>
-          <Route element={<PermissionGuard permission="usuario.ver" />}>
+          <Route element={<PermissionGuard permission="usuario.gestionar" />}>
             <Route path="/admin/usuarios" element={<UsersPage />} />
           </Route>
-          <Route element={<PermissionGuard permission="rol.ver" />}>
+          <Route element={<PermissionGuard permission="rol.gestionar" />}>
             <Route path="/admin/roles" element={<RolesPage />} />
           </Route>
-          <Route element={<PermissionGuard permission="contexto.ver" />}>
+          <Route element={<PermissionGuard permission="negocioevento.gestionar" />}>
             <Route path="/admin/contextos" element={<ContextsAdminPage />} />
           </Route>
         </Route>
 
         <Route element={<ReportsLayout />}>
-          <Route element={<PermissionGuard permission="auditoria.consultar" />}>
+          <Route
+            element={
+              <PermissionGuard
+                anyOf={[
+                  'auditoria.consultar',
+                  'reporte.ver',
+                  'reporte.exportar',
+                  'reporte.ventas',
+                  'reporte.caja',
+                  'reporte.compras',
+                  'reporte.egresos',
+                  'reporte.stock',
+                  'reporte.utilidad',
+                ]}
+              />
+            }
+          >
             <Route path="/reportes" element={<ReportsHomePage />} />
           </Route>
         </Route>

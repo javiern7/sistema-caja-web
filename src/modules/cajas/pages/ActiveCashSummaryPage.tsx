@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { MetricCard } from '../../../components/ui/MetricCard';
@@ -24,13 +24,22 @@ export function ActiveCashSummaryPage() {
     retry: false,
   });
 
-  const summary = summaryQuery.data ? normalizeCashBox(summaryQuery.data) : activeCash;
+  const summary = useMemo(() => {
+    return summaryQuery.data ? normalizeCashBox(summaryQuery.data) : activeCash;
+  }, [activeCash, summaryQuery.data]);
 
   useEffect(() => {
-    if (summaryQuery.isSuccess && summary) {
+    if (!summaryQuery.data || !summary) {
+      return;
+    }
+
+    const currentSnapshot = JSON.stringify(activeCash);
+    const nextSnapshot = JSON.stringify(summary);
+
+    if (currentSnapshot !== nextSnapshot) {
       setActiveCash(summary);
     }
-  }, [setActiveCash, summary, summaryQuery.isSuccess]);
+  }, [activeCash, setActiveCash, summary, summaryQuery.data]);
 
   if (!activeCash) {
     return (

@@ -14,6 +14,17 @@ export function OperationalLayout() {
   const user = useAuthStore((state) => state.user);
   const clearSession = useAuthStore((state) => state.clearSession);
   const hasPermission = useAuthStore((state) => state.hasPermission);
+  const canReadCash = hasPermission('caja.abrir') || hasPermission('caja.cerrar');
+  const canAccessReports =
+    hasPermission('auditoria.consultar') ||
+    hasPermission('reporte.ver') ||
+    hasPermission('reporte.exportar') ||
+    hasPermission('reporte.ventas') ||
+    hasPermission('reporte.caja') ||
+    hasPermission('reporte.compras') ||
+    hasPermission('reporte.egresos') ||
+    hasPermission('reporte.stock') ||
+    hasPermission('reporte.utilidad');
   const clearOperationalState = useOperationalStore((state) => state.clearOperationalState);
   const activeContext = useOperationalStore((state) => state.activeContext);
   const activeCash = useOperationalStore((state) => state.activeCash);
@@ -28,7 +39,7 @@ export function OperationalLayout() {
   const activeCashQuery = useQuery({
     queryKey: ['cash-box', 'active', activeContext?.id],
     queryFn: fetchActiveCashBox,
-    enabled: Boolean(activeContext),
+    enabled: Boolean(activeContext) && canReadCash,
     retry: false,
   });
 
@@ -54,13 +65,13 @@ export function OperationalLayout() {
   const navItems = [
     { to: '/contexto', label: 'Contexto', visible: true },
     { to: '/caja/apertura', label: 'Apertura', visible: hasPermission('caja.abrir') },
-    { to: '/caja/activa', label: 'Caja activa', visible: true },
-    { to: '/caja/historial', label: 'Historial cajas', visible: Boolean(activeContext) },
+    { to: '/caja/activa', label: 'Caja activa', visible: canReadCash },
+    { to: '/caja/historial', label: 'Historial cajas', visible: canReadCash && Boolean(activeContext) },
     { to: '/ventas/nueva', label: 'Venta rapida', visible: hasPermission('venta.registrar') },
     { to: '/egresos/nuevo', label: 'Egresos', visible: hasPermission('egreso.registrar') },
     { to: '/compras/nueva', label: 'Compras', visible: hasPermission('compra.registrar') },
     { to: '/stock', label: 'Stock', visible: hasPermission('stock.consultar') },
-    { to: '/reportes', label: 'Reportes', visible: hasPermission('auditoria.consultar') || hasPermission('reporte.ver') },
+    { to: '/reportes', label: 'Reportes', visible: canAccessReports },
   ].filter((item) => item.visible);
 
   return (
@@ -93,12 +104,22 @@ export function OperationalLayout() {
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-slate-900">Caja</p>
                 <StatusBadge
-                  label={activeCashQuery.isLoading ? 'Validando' : activeCash?.status === 'ABIERTA' ? 'Abierta' : 'Sin apertura'}
-                  tone={activeCash?.status === 'ABIERTA' ? 'success' : 'warning'}
+                  label={
+                    !canReadCash
+                      ? 'Sin permiso'
+                      : activeCashQuery.isLoading
+                        ? 'Validando'
+                        : activeCash?.status === 'ABIERTA'
+                          ? 'Abierta'
+                          : 'Sin apertura'
+                  }
+                  tone={!canReadCash ? 'neutral' : activeCash?.status === 'ABIERTA' ? 'success' : 'warning'}
                 />
               </div>
               <p className="text-sm text-slate-600">
-                {activeCash?.status === 'ABIERTA'
+                {!canReadCash
+                  ? 'Tu sesion no tiene acceso a los endpoints de caja activa del backend.'
+                  : activeCash?.status === 'ABIERTA'
                   ? `Monto de apertura registrado: ${formatCurrency(activeCash.openingAmount)}`
                   : 'La operacion guiara primero a apertura de caja.'}
               </p>

@@ -379,6 +379,138 @@ export type AuditOperationDto = {
   detail?: string;
 };
 
+export type ReportFilters = {
+  fechaDesde?: string;
+  fechaHasta?: string;
+  operationalContextId?: number;
+};
+
+export type SalesReportRowDto = {
+  saleId: string | number;
+  createdAt?: string;
+  operationalContextId?: string | number;
+  operationalContextName?: string;
+  soldByUsername?: string;
+  internalReceipt?: string;
+  totalAmount: number;
+  itemsCount: number;
+};
+
+export type SalesReportDto = {
+  fechaDesde?: string;
+  fechaHasta?: string;
+  operationalContextId?: string | number;
+  totalSales: number;
+  totalAmount: number;
+  items: SalesReportRowDto[];
+};
+
+export type CashReportRowDto = {
+  cashBoxId: string | number;
+  operationalContextId?: string | number;
+  operationalContextName?: string;
+  openedByUsername?: string;
+  closedByUsername?: string;
+  status: string;
+  openingAmount: number;
+  expectedAmount: number;
+  countedAmount?: number | null;
+  differenceAmount?: number | null;
+  openedAt?: string;
+  closedAt?: string;
+};
+
+export type CashReportDto = {
+  fechaDesde?: string;
+  fechaHasta?: string;
+  operationalContextId?: string | number;
+  totalCashBoxes: number;
+  totalOpeningAmount: number;
+  totalExpectedAmount: number;
+  totalDifferenceAmount: number;
+  items: CashReportRowDto[];
+};
+
+export type PurchaseReportRowDto = {
+  purchaseId: string | number;
+  purchaseDate?: string;
+  operationalContextId?: string | number;
+  operationalContextName?: string;
+  providerName?: string;
+  status: string;
+  effectiveAmount: number;
+};
+
+export type PurchaseReportDto = {
+  fechaDesde?: string;
+  fechaHasta?: string;
+  operationalContextId?: string | number;
+  totalPurchases: number;
+  totalAmount: number;
+  items: PurchaseReportRowDto[];
+};
+
+export type ExpenseReportRowDto = {
+  expenseId: string | number;
+  expenseDate?: string;
+  operationalContextId?: string | number;
+  operationalContextName?: string;
+  expenseType: string;
+  category: string;
+  description: string;
+  amount: number;
+  recordedByUsername?: string;
+};
+
+export type ExpenseReportDto = {
+  fechaDesde?: string;
+  fechaHasta?: string;
+  operationalContextId?: string | number;
+  totalExpenses: number;
+  totalAmount: number;
+  items: ExpenseReportRowDto[];
+};
+
+export type StockReportRowDto = {
+  productId: string | number;
+  productCode: string;
+  productName: string;
+  unitOfMeasure: string;
+  active: boolean;
+  stockControlled: boolean;
+  minimumStock: number;
+  currentStock: number;
+  updatedAt?: string;
+};
+
+export type StockReportDto = {
+  stockScope: string;
+  totalProducts: number;
+  totalUnits: number;
+  items: StockReportRowDto[];
+};
+
+export type UtilityReportDto = {
+  fechaDesde?: string;
+  fechaHasta?: string;
+  operationalContextId?: string | number;
+  salesAmount: number;
+  purchaseAmount: number;
+  expenseAmount: number;
+  estimatedCostOfSales: number;
+  grossMargin: number;
+  netUtility: number;
+};
+
+export type ReportHistoryDto = {
+  id: string | number;
+  reportType: string;
+  format: string;
+  generatedBy: string;
+  filters?: string;
+  generatedAt?: string;
+};
+
 export type SystemHealthDto = {
   status: string;
   application: string;

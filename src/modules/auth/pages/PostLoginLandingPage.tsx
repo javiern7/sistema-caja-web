@@ -14,12 +14,18 @@ function resolveSuggestedRoute(options: {
   hasOpenCash: boolean;
 }) {
   const { role, hasPermission, hasActiveContext, hasOpenCash } = options;
+  const hasOperationalFlow =
+    hasPermission('caja.abrir') ||
+    hasPermission('caja.cerrar') ||
+    hasPermission('venta.registrar') ||
+    hasPermission('compra.registrar') ||
+    hasPermission('egreso.registrar');
 
-  if (!hasActiveContext) {
+  if (!hasActiveContext && hasOperationalFlow) {
     return '/contexto';
   }
 
-  if (role === 'Administrador' && hasPermission('producto.ver')) {
+  if (role === 'Administrador' && hasPermission('producto.gestionar')) {
     return '/admin/productos';
   }
 
@@ -37,6 +43,18 @@ function resolveSuggestedRoute(options: {
 
   if (hasPermission('stock.consultar')) {
     return '/stock';
+  }
+
+  if (hasPermission('egreso.registrar')) {
+    return '/egresos/nuevo';
+  }
+
+  if (hasPermission('reporte.ver') || hasPermission('auditoria.consultar')) {
+    return '/reportes';
+  }
+
+  if (hasPermission('negocioevento.gestionar')) {
+    return '/admin/contextos';
   }
 
   return '/sin-permiso';

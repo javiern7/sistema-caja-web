@@ -113,13 +113,22 @@ export const useOperationalStore = create<OperationalState>()(
           const normalizedContexts = contexts.map(normalizeContext);
           const activeContext =
             normalizedContexts.find((context) => context.id === state.activeContext?.id) ?? state.activeContext;
+          const activeCash =
+            state.activeCash && activeContext && state.activeCash.operationalContextId === activeContext.id
+              ? state.activeCash
+              : null;
 
           return {
             availableContexts: normalizedContexts,
             activeContext: activeContext ?? null,
+            activeCash,
           };
         }),
-      setActiveContext: (context) => set({ activeContext: context }),
+      setActiveContext: (context) =>
+        set((state) => ({
+          activeContext: context,
+          activeCash: state.activeCash?.operationalContextId === context.id ? state.activeCash : null,
+        })),
       setActiveCash: (cash) => set({ activeCash: cash }),
       openDemoCash: () => set({ activeCash: null }),
       closeDemoCash: () => set({ activeCash: null }),

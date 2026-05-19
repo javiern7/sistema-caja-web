@@ -80,6 +80,8 @@ export function SalesPage() {
     register,
     handleSubmit,
     reset,
+    setError,
+    clearErrors,
     watch,
     formState: { errors },
   } = useForm<SaleFormValues>({
@@ -168,15 +170,24 @@ export function SalesPage() {
 
         <form
           className="space-y-6"
-          onSubmit={handleSubmit((values) =>
+          onSubmit={handleSubmit((values) => {
+            if (calculatedTotal !== paymentTotal) {
+              setError('payments', {
+                type: 'manual',
+                message: 'La suma de pagos debe coincidir exactamente con el total de items.',
+              });
+              return;
+            }
+
+            clearErrors('payments');
             createMutation.mutate({
               operationalContextId: Number(activeContext.id),
               cashBoxId: Number(activeCash.id),
               items: values.items,
               payments: values.payments,
               observation: values.observation,
-            }),
-          )}
+            });
+          })}
         >
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-4">
@@ -254,6 +265,10 @@ export function SalesPage() {
             <span className="text-sm font-medium text-slate-700">Observacion</span>
             <textarea className={`${inputClass} min-h-24`} {...register('observation')} />
           </label>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            Total items: {formatCurrency(calculatedTotal)} | Total pagos: {formatCurrency(paymentTotal)}
+          </div>
 
           {createMutation.isError ? (
             <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">

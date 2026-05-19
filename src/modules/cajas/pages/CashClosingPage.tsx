@@ -38,6 +38,9 @@ export function CashClosingPage() {
   const {
     register,
     handleSubmit,
+    setError,
+    clearErrors,
+    watch,
     formState: { errors },
   } = useForm<CloseFormValues>({
     resolver: zodResolver(closeSchema),
@@ -58,6 +61,8 @@ export function CashClosingPage() {
   });
 
   const summary = summaryQuery.data ? normalizeCashBox(summaryQuery.data) : activeCash;
+  const countedAmount = watch('countedAmount');
+  const expectedDifference = Number(countedAmount ?? 0) - Number(summary?.expectedAmount ?? 0);
 
   if (!activeCash) {
     return (
@@ -120,7 +125,23 @@ export function CashClosingPage() {
               <p className="mt-2 text-sm text-slate-600">El backend exige `countedAmount` y permite una observacion opcional.</p>
             </div>
 
-            <form className="space-y-4" onSubmit={handleSubmit((values) => closeMutation.mutate(values))}>
+            <form
+              className="space-y-4"
+              onSubmit={handleSubmit((values) => {
+                const differenceAmount = Number(values.countedAmount) - Number(summary.expectedAmount ?? 0);
+
+                if (differenceAmount !== 0 && !values.observation?.trim()) {
+                  setError('observation', {
+                    type: 'manual',
+                    message: 'La observacion es obligatoria cuando existe diferencia en el cierre.',
+                  });
+                  return;
+                }
+
+                clearErrors('observation');
+                closeMutation.mutate(values);
+              })}
+            >
               <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-700">Monto contado</span>
                 <input className={inputClass} step="0.01" type="number" {...register('countedAmount')} />
@@ -130,7 +151,12 @@ export function CashClosingPage() {
               <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-700">Observacion de cierre</span>
                 <textarea className={`${inputClass} min-h-28`} {...register('observation')} />
+                {errors.observation ? <span className="text-xs text-rose-600">{errors.observation.message}</span> : null}
               </label>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                Diferencia esperada con el monto digitado: {formatCurrency(expectedDifference)}
+              </div>
 
               {closeMutation.isError ? (
                 <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">

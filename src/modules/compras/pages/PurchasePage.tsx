@@ -43,6 +43,14 @@ const cancelPurchaseSchema = z.object({
       }),
     )
     .min(1),
+}).superRefine((values, context) => {
+  if (!values.cancelledItems.some((item) => Number(item.cancelledQuantity) > 0)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Debes indicar al menos un item con cantidad mayor a cero para anular.',
+      path: ['cancelledItems'],
+    });
+  }
 });
 
 type PurchaseFormValues = z.infer<typeof purchaseSchema>;

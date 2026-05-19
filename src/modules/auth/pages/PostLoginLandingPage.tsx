@@ -12,14 +12,19 @@ function resolveSuggestedRoute(options: {
   hasPermission: (permission: string) => boolean;
   hasActiveContext: boolean;
   hasOpenCash: boolean;
+  hasAvailableContexts: boolean;
 }) {
-  const { role, hasPermission, hasActiveContext, hasOpenCash } = options;
+  const { role, hasPermission, hasActiveContext, hasOpenCash, hasAvailableContexts } = options;
   const hasOperationalFlow =
     hasPermission('caja.abrir') ||
     hasPermission('caja.cerrar') ||
     hasPermission('venta.registrar') ||
     hasPermission('compra.registrar') ||
     hasPermission('egreso.registrar');
+
+  if (!hasAvailableContexts && hasPermission('negocioevento.gestionar')) {
+    return '/admin/contextos';
+  }
 
   if (!hasActiveContext && hasOperationalFlow) {
     return '/contexto';
@@ -89,6 +94,7 @@ export function PostLoginLandingPage() {
     hasPermission,
     hasActiveContext: Boolean(activeContext),
     hasOpenCash: activeCash?.status === 'ABIERTA',
+    hasAvailableContexts: availableContexts.length > 0,
   });
 
   const permissionCount = user?.permissions.length ?? 0;
@@ -154,8 +160,17 @@ export function PostLoginLandingPage() {
         ) : null}
 
         {!contextsQuery.isLoading && !contextsQuery.isError && !hasContexts ? (
-          <div className="mt-4 rounded-3xl bg-amber-50 px-4 py-4 text-sm text-amber-700">
-            La sesion esta activa, pero el backend no devolvio contextos operativos disponibles para este usuario.
+          <div className="mt-4 space-y-4 rounded-3xl bg-amber-50 px-4 py-4 text-sm text-amber-700">
+            <p>La sesion esta activa, pero el backend no devolvio contextos operativos disponibles para este usuario.</p>
+            {hasPermission('negocioevento.gestionar') ? (
+              <button
+                className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                onClick={() => navigate('/admin/contextos')}
+                type="button"
+              >
+                Ir a crear contexto
+              </button>
+            ) : null}
           </div>
         ) : null}
 

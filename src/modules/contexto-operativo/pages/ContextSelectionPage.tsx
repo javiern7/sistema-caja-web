@@ -27,6 +27,7 @@ export function ContextSelectionPage() {
     }
   }, [contextsQuery.data, setAvailableContexts]);
 
+  const canManageContexts = hasPermission('negocioevento.gestionar');
   const nextRoute = hasPermission('caja.abrir')
     ? '/caja/apertura'
     : hasPermission('caja.cerrar')
@@ -61,8 +62,17 @@ export function ContextSelectionPage() {
       ) : null}
 
       {!contextsQuery.isLoading && !contextsQuery.isError && availableContexts.length === 0 ? (
-        <div className="rounded-3xl bg-amber-50 px-4 py-4 text-sm text-amber-700">
-          Tu usuario no tiene contextos operativos disponibles todavia.
+        <div className="space-y-4 rounded-3xl bg-amber-50 px-4 py-4 text-sm text-amber-700">
+          <p>Tu usuario no tiene contextos operativos disponibles todavia.</p>
+          {canManageContexts ? (
+            <button
+              className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              onClick={() => navigate('/admin/contextos')}
+              type="button"
+            >
+              Crear contexto operativo
+            </button>
+          ) : null}
         </div>
       ) : null}
 

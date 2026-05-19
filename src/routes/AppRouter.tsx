@@ -2,7 +2,6 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AdminLayout } from '../layouts/AdminLayout';
 import { AuthLayout } from '../layouts/AuthLayout';
 import { OperationalLayout } from '../layouts/OperationalLayout';
-import { ReportsLayout } from '../layouts/ReportsLayout';
 import { LoginPage } from '../modules/auth/pages/LoginPage';
 import { PostLoginLandingPage } from '../modules/auth/pages/PostLoginLandingPage';
 import { ActiveCashSummaryPage } from '../modules/cajas/pages/ActiveCashSummaryPage';
@@ -89,6 +88,27 @@ export function AppRouter() {
             <Route element={<PermissionGuard permission="stock.consultar" />}>
               <Route path="/stock" element={<StockPage />} />
             </Route>
+
+          </Route>
+
+          <Route
+            element={
+              <PermissionGuard
+                anyOf={[
+                  'auditoria.consultar',
+                  'reporte.ver',
+                  'reporte.exportar',
+                  'reporte.ventas',
+                  'reporte.caja',
+                  'reporte.compras',
+                  'reporte.egresos',
+                  'reporte.stock',
+                  'reporte.utilidad',
+                ]}
+              />
+            }
+          >
+            <Route path="/reportes" element={<ReportsHomePage />} />
           </Route>
         </Route>
 
@@ -110,27 +130,6 @@ export function AppRouter() {
           </Route>
         </Route>
 
-        <Route element={<ReportsLayout />}>
-          <Route
-            element={
-              <PermissionGuard
-                anyOf={[
-                  'auditoria.consultar',
-                  'reporte.ver',
-                  'reporte.exportar',
-                  'reporte.ventas',
-                  'reporte.caja',
-                  'reporte.compras',
-                  'reporte.egresos',
-                  'reporte.stock',
-                  'reporte.utilidad',
-                ]}
-              />
-            }
-          >
-            <Route path="/reportes" element={<ReportsHomePage />} />
-          </Route>
-        </Route>
       </Route>
 
       <Route path="*" element={<Navigate replace to="/" />} />

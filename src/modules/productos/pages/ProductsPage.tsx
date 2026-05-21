@@ -113,6 +113,10 @@ export function ProductsPage() {
     });
   }, [editForm, selectedProduct]);
 
+  const handleSelectProduct = (productId: string | number) => {
+    setSelectedProductId(String(productId));
+  };
+
   return (
     <ResourcePageShell
       badge="FE-PRO-001 Productos"
@@ -209,11 +213,7 @@ export function ProductsPage() {
               {
                 key: 'code',
                 header: 'Codigo',
-                render: (product) => (
-                  <button className="text-left font-medium text-slate-900" onClick={() => setSelectedProductId(String(product.id))} type="button">
-                    {product.code}
-                  </button>
-                ),
+                render: (product) => <span className="font-medium text-slate-900">{product.code}</span>,
               },
               {
                 key: 'name',
@@ -249,12 +249,45 @@ export function ProductsPage() {
                 key: 'status',
                 header: 'Estado',
                 render: (product) => (
-                  <button onClick={() => toggleStatusMutation.mutate({ productId: Number(product.id), active: !product.active })} type="button">
-                    <StatusBadge label={product.active ? 'Activo' : 'Inactivo'} tone={product.active ? 'success' : 'warning'} />
-                  </button>
+                  <StatusBadge label={product.active ? 'Activo' : 'Inactivo'} tone={product.active ? 'success' : 'warning'} />
                 ),
               },
+              {
+                key: 'actions',
+                header: 'Acciones',
+                render: (product) => {
+                  const isCurrentProduct = String(product.id) === selectedProductId;
+                  const isTogglingStatus = toggleStatusMutation.isPending && toggleStatusMutation.variables?.productId === Number(product.id);
+
+                  return (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className={`rounded-2xl px-3 py-2 text-xs font-semibold transition ${
+                          isCurrentProduct
+                            ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200'
+                            : 'border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                        }`}
+                        onClick={() => handleSelectProduct(product.id)}
+                        type="button"
+                      >
+                        {isCurrentProduct ? 'Editando' : 'Editar'}
+                      </button>
+                      <button
+                        className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isTogglingStatus}
+                        onClick={() => toggleStatusMutation.mutate({ productId: Number(product.id), active: !product.active })}
+                        type="button"
+                      >
+                        {isTogglingStatus ? 'Actualizando...' : product.active ? 'Inactivar' : 'Activar'}
+                      </button>
+                    </div>
+                  );
+                },
+              },
             ]}
+            rowClassName={(product) =>
+              String(product.id) === selectedProductId ? 'align-top bg-brand-50/50 ring-1 ring-inset ring-brand-100' : 'align-top'
+            }
             rowKey={(product) => String(product.id)}
             rows={products}
           />
@@ -263,7 +296,9 @@ export function ProductsPage() {
             <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
               <div className="mb-5">
                 <h2 className="text-lg font-semibold text-slate-950">Editar producto</h2>
-                <p className="mt-2 text-sm text-slate-600">Actualiza el registro seleccionado usando `PUT /api/v1/productos/{'{productId}'}`.</p>
+                <p className="mt-2 text-sm text-slate-600">
+                  Editando <span className="font-semibold text-slate-900">{selectedProduct.name}</span> usando `PUT /api/v1/productos/{'{productId}'}`. Para retirar un producto del uso operativo, usa `Inactivar`.
+                </p>
               </div>
               <form className="grid gap-4 md:grid-cols-2" onSubmit={editForm.handleSubmit((values) => updateMutation.mutate(values))}>
                 <label className="space-y-2">

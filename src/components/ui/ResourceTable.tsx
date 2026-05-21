@@ -10,9 +10,10 @@ type ResourceTableProps<T> = {
   columns: Column<T>[];
   rows: T[];
   rowKey: (row: T) => string;
+  rowClassName?: (row: T) => string | undefined;
 };
 
-export function ResourceTable<T>({ columns, rows, rowKey }: ResourceTableProps<T>) {
+export function ResourceTable<T>({ columns, rows, rowKey, rowClassName }: ResourceTableProps<T>) {
   return (
     <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft">
       <div className="overflow-x-auto">
@@ -31,7 +32,7 @@ export function ResourceTable<T>({ columns, rows, rowKey }: ResourceTableProps<T
           </thead>
           <tbody className="divide-y divide-slate-100">
             {rows.map((row) => (
-              <tr key={rowKey(row)} className="align-top">
+              <tr key={rowKey(row)} className={rowClassName ? rowClassName(row) : 'align-top'}>
                 {columns.map((column) => (
                   <td key={column.key} className="px-4 py-4 text-sm text-slate-700">
                     {column.render(row)}

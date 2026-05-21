@@ -57,6 +57,13 @@ export function ProvidersPage() {
     },
   });
 
+  const toggleStatusMutation = useMutation({
+    mutationFn: ({ providerId, values }: { providerId: number; values: UpdateProviderRequest }) => updateProvider(providerId, values),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'proveedores'] });
+    },
+  });
+
   const providers = providersQuery.data ?? [];
   const selectedProvider = providers.find((provider) => String(provider.id) === selectedProviderId) ?? null;
   const activeProviders = providers.filter((provider) => provider.active).length;
@@ -72,6 +79,10 @@ export function ProvidersPage() {
       active: selectedProvider.active,
     });
   }, [editForm, selectedProvider]);
+
+  const handleSelectProvider = (providerId: string | number) => {
+    setSelectedProviderId(String(providerId));
+  };
 
   return (
     <ResourcePageShell
@@ -118,10 +129,10 @@ export function ProvidersPage() {
                 key: 'name',
                 header: 'Proveedor',
                 render: (provider) => (
-                  <button className="text-left" onClick={() => setSelectedProviderId(String(provider.id))} type="button">
+                  <div className="text-left">
                     <p className="font-medium text-slate-900">{provider.name}</p>
                     <p className="text-xs text-slate-500">{provider.documentNumber ?? 'Sin documento'}</p>
-                  </button>
+                  </div>
                 ),
               },
               {
@@ -139,13 +150,65 @@ export function ProvidersPage() {
                 header: 'Estado',
                 render: (provider) => <StatusBadge label={provider.active ? 'Activo' : 'Inactivo'} tone={provider.active ? 'success' : 'warning'} />,
               },
+              {
+                key: 'actions',
+                header: 'Acciones',
+                render: (provider) => {
+                  const isCurrentProvider = String(provider.id) === selectedProviderId;
+                  const isTogglingStatus = toggleStatusMutation.isPending && toggleStatusMutation.variables?.providerId === Number(provider.id);
+
+                  return (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className={`rounded-2xl px-3 py-2 text-xs font-semibold transition ${
+                          isCurrentProvider
+                            ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200'
+                            : 'border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                        }`}
+                        onClick={() => handleSelectProvider(provider.id)}
+                        type="button"
+                      >
+                        {isCurrentProvider ? 'Editando' : 'Editar'}
+                      </button>
+                      <button
+                        className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isTogglingStatus}
+                        onClick={() =>
+                          toggleStatusMutation.mutate({
+                            providerId: Number(provider.id),
+                            values: {
+                              name: provider.name,
+                              documentNumber: provider.documentNumber ?? '',
+                              contactName: provider.contactName ?? '',
+                              phone: provider.phone ?? '',
+                              email: provider.email ?? '',
+                              active: !provider.active,
+                            },
+                          })
+                        }
+                        type="button"
+                      >
+                        {isTogglingStatus ? 'Actualizando...' : provider.active ? 'Inactivar' : 'Activar'}
+                      </button>
+                    </div>
+                  );
+                },
+              },
             ]}
+            rowClassName={(provider) =>
+              String(provider.id) === selectedProviderId ? 'align-top bg-brand-50/50 ring-1 ring-inset ring-brand-100' : 'align-top'
+            }
             rowKey={(provider) => String(provider.id)}
             rows={providers}
           />
           {selectedProvider ? (
             <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
-              <div className="mb-5"><h2 className="text-lg font-semibold text-slate-950">Editar proveedor</h2></div>
+              <div className="mb-5">
+                <h2 className="text-lg font-semibold text-slate-950">Editar proveedor</h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  Editando <span className="font-semibold text-slate-900">{selectedProvider.name}</span> usando `PUT /api/v1/proveedores/{'{providerId}'}`. Para retirar un proveedor del flujo operativo, usa `Inactivar`.
+                </p>
+              </div>
               <form className="grid gap-4 md:grid-cols-2" onSubmit={editForm.handleSubmit((values) => updateMutation.mutate(values))}>
                 <label className="space-y-2"><span className="text-sm font-medium text-slate-700">Nombre</span><input className={inputClass} {...editForm.register('name')} /></label>
                 <label className="space-y-2"><span className="text-sm font-medium text-slate-700">Documento</span><input className={inputClass} {...editForm.register('documentNumber')} /></label>

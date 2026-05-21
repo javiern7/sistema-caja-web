@@ -14,6 +14,21 @@ export function OperationalLayout() {
   const user = useAuthStore((state) => state.user);
   const clearSession = useAuthStore((state) => state.clearSession);
   const hasPermission = useAuthStore((state) => state.hasPermission);
+  const hasAdminAccess =
+    hasPermission('producto.gestionar') ||
+    hasPermission('proveedor.gestionar') ||
+    hasPermission('usuario.gestionar') ||
+    hasPermission('rol.gestionar') ||
+    hasPermission('negocioevento.gestionar');
+  const adminRoute = hasPermission('negocioevento.gestionar')
+    ? '/admin/contextos'
+    : hasPermission('producto.gestionar')
+      ? '/admin/productos'
+      : hasPermission('proveedor.gestionar')
+        ? '/admin/proveedores'
+        : hasPermission('usuario.gestionar')
+          ? '/admin/usuarios'
+          : '/admin/roles';
   const canReadCash = hasPermission('caja.abrir') || hasPermission('caja.cerrar');
   const canAccessReports =
     hasPermission('auditoria.consultar') ||
@@ -72,6 +87,7 @@ export function OperationalLayout() {
     { to: '/compras/nueva', label: 'Compras', visible: hasPermission('compra.registrar') },
     { to: '/stock', label: 'Stock', visible: hasPermission('stock.consultar') },
     { to: '/reportes', label: 'Reportes', visible: canAccessReports },
+    { to: adminRoute, label: 'Administracion', visible: hasAdminAccess },
   ].filter((item) => item.visible);
 
   return (

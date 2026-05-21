@@ -89,6 +89,15 @@ export function ContextsAdminPage() {
     });
   }, [editForm, selectedContext]);
 
+  const selectedStatus = editForm.watch('status');
+  const applyStatusChange = (status: ContextFormValues['status']) => {
+    const values = editForm.getValues();
+    updateMutation.mutate({
+      ...values,
+      status,
+    });
+  };
+
   return (
     <ResourcePageShell
       badge="FE-NEG-001 Contextos"
@@ -104,7 +113,10 @@ export function ContextsAdminPage() {
       title="Negocios y eventos"
     >
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
-        <div className="mb-5"><h2 className="text-lg font-semibold text-slate-950">Registrar contexto operativo</h2></div>
+        <div className="mb-5">
+          <h2 className="text-lg font-semibold text-slate-950">Registrar contexto operativo</h2>
+          <p className="mt-2 text-sm text-slate-600">Registra el negocio o evento con su estado inicial. Luego podras administrarlo y cambiar su estado desde la edicion.</p>
+        </div>
         <form className="grid gap-4 md:grid-cols-2" onSubmit={createForm.handleSubmit((values) => createMutation.mutate(values))}>
           <label className="space-y-2"><span className="text-sm font-medium text-slate-700">Codigo</span><input className={inputClass} {...createForm.register('code')} /></label>
           <label className="space-y-2"><span className="text-sm font-medium text-slate-700">Nombre</span><input className={inputClass} {...createForm.register('name')} /></label>
@@ -156,7 +168,55 @@ export function ContextsAdminPage() {
           />
           {selectedContext ? (
             <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
-              <div className="mb-5"><h2 className="text-lg font-semibold text-slate-950">Editar contexto operativo</h2></div>
+              <div className="mb-5 space-y-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-950">Editar contexto operativo</h2>
+                  <p className="mt-2 text-sm text-slate-600">Aqui puedes actualizar el contexto y tambien cambiarlo rapidamente a planificado, en curso, cerrado o cancelado.</p>
+                </div>
+                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{selectedContext.name ?? selectedContext.nombre}</p>
+                      <p className="mt-1 text-sm text-slate-600">Estado actual del contexto: {selectedStatus.replace('_', ' ')}</p>
+                    </div>
+                    <StatusBadge label={selectedStatus} tone="neutral" />
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:opacity-50"
+                      disabled={updateMutation.isPending || selectedStatus === 'PLANIFICADO'}
+                      onClick={() => applyStatusChange('PLANIFICADO')}
+                      type="button"
+                    >
+                      Marcar planificado
+                    </button>
+                    <button
+                      className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:opacity-50"
+                      disabled={updateMutation.isPending || selectedStatus === 'EN_CURSO'}
+                      onClick={() => applyStatusChange('EN_CURSO')}
+                      type="button"
+                    >
+                      Marcar en curso
+                    </button>
+                    <button
+                      className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:opacity-50"
+                      disabled={updateMutation.isPending || selectedStatus === 'CERRADO'}
+                      onClick={() => applyStatusChange('CERRADO')}
+                      type="button"
+                    >
+                      Cerrar contexto
+                    </button>
+                    <button
+                      className="rounded-2xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-50"
+                      disabled={updateMutation.isPending || selectedStatus === 'CANCELADO'}
+                      onClick={() => applyStatusChange('CANCELADO')}
+                      type="button"
+                    >
+                      Cancelar contexto
+                    </button>
+                  </div>
+                </div>
+              </div>
               <form className="grid gap-4 md:grid-cols-2" onSubmit={editForm.handleSubmit((values) => updateMutation.mutate(values))}>
                 <label className="space-y-2"><span className="text-sm font-medium text-slate-700">Codigo</span><input className={inputClass} {...editForm.register('code')} /></label>
                 <label className="space-y-2"><span className="text-sm font-medium text-slate-700">Nombre</span><input className={inputClass} {...editForm.register('name')} /></label>

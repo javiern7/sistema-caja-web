@@ -90,9 +90,17 @@ export function CashClosingPage() {
       documents={['04 - HU-CAJ-003', '18 - API-CAJ-003', '26 - Frontend Fase operativa']}
       summary={
         <div className="grid gap-4 md:grid-cols-3">
-          <MetricCard helper="Monto calculado por backend con ventas y egresos." label="Esperado" value={formatCurrency(summary?.expectedAmount)} />
-          <MetricCard helper="Apertura que dio inicio al turno actual." label="Apertura" value={formatCurrency(summary?.openingAmount)} />
-          <MetricCard helper="Ultima actualizacion consultada." label="Resumen consultado" value={formatDateTime(summary?.openedAt)} />
+          <MetricCard
+            helper="Saldo que el sistema calcula para la caja segun apertura, ventas, ingresos extra y egresos."
+            label="Monto esperado en caja"
+            value={formatCurrency(summary?.expectedAmount)}
+          />
+          <MetricCard
+            helper="Monto inicial con el que se abrio la caja para este turno."
+            label="Monto inicial de apertura"
+            value={formatCurrency(summary?.openingAmount)}
+          />
+          <MetricCard helper="Fecha y hora en la que se abrio la caja actual." label="Caja abierta desde" value={formatDateTime(summary?.openedAt)} />
         </div>
       }
       title="Cierre de caja"
@@ -110,19 +118,20 @@ export function CashClosingPage() {
       {summary ? (
         <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
-            <h2 className="text-lg font-semibold text-slate-950">Validacion previa</h2>
+            <h2 className="text-lg font-semibold text-slate-950">Resumen antes del cierre</h2>
+            <p className="mt-2 text-sm text-slate-600">Este bloque explica como el sistema obtuvo el monto esperado de caja antes de registrar el cierre.</p>
             <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <MetricCard helper="Ventas acumuladas." label="Ventas" value={formatCurrency(summary.totalSales)} />
-              <MetricCard helper="Egresos cargados a la caja." label="Egresos" value={formatCurrency(summary.totalExpenses)} />
-              <MetricCard helper="Ingresos adicionales." label="Ingresos extra" value={formatCurrency(summary.additionalIncome)} />
-              <MetricCard helper="Ultima diferencia registrada." label="Diferencia previa" value={formatCurrency(summary.differenceAmount)} />
+              <MetricCard helper="Total vendido y registrado en esta caja." label="Ventas acumuladas" value={formatCurrency(summary.totalSales)} />
+              <MetricCard helper="Total de salidas de dinero registradas en esta caja." label="Egresos registrados" value={formatCurrency(summary.totalExpenses)} />
+              <MetricCard helper="Ingresos adicionales incorporados manualmente a la caja." label="Ingresos extra" value={formatCurrency(summary.additionalIncome)} />
+              <MetricCard helper="Ultima diferencia registrada anteriormente, si existiera." label="Diferencia previa" value={formatCurrency(summary.differenceAmount)} />
             </div>
           </article>
 
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
             <div className="mb-5">
               <h2 className="text-lg font-semibold text-slate-950">Registrar cierre</h2>
-              <p className="mt-2 text-sm text-slate-600">El backend exige `countedAmount` y permite una observacion opcional.</p>
+              <p className="mt-2 text-sm text-slate-600">Ingresa el monto fisico contado en caja. Si existe una diferencia contra lo esperado por el sistema, debes explicar el motivo.</p>
             </div>
 
             <form
@@ -143,19 +152,21 @@ export function CashClosingPage() {
               })}
             >
               <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Monto contado</span>
+                <span className="text-sm font-medium text-slate-700">Monto fisico contado</span>
                 <input className={inputClass} step="0.01" type="number" {...register('countedAmount')} />
+                <p className="text-xs text-slate-500">Es el dinero real que contaste al momento de cerrar la caja.</p>
                 {errors.countedAmount ? <span className="text-xs text-rose-600">{errors.countedAmount.message}</span> : null}
               </label>
 
               <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-700">Observacion de cierre</span>
                 <textarea className={`${inputClass} min-h-28`} {...register('observation')} />
+                <p className="text-xs text-slate-500">Describe cualquier sobrante, faltante o incidencia detectada durante el cierre.</p>
                 {errors.observation ? <span className="text-xs text-rose-600">{errors.observation.message}</span> : null}
               </label>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                Diferencia esperada con el monto digitado: {formatCurrency(expectedDifference)}
+                Diferencia entre el sistema y tu conteo: {formatCurrency(expectedDifference)}
               </div>
 
               {closeMutation.isError ? (

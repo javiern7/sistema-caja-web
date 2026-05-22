@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFieldArray, useForm } from 'react-hook-form';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { MetricCard } from '../../../components/ui/MetricCard';
 import { ResourcePageShell } from '../../../components/ui/ResourcePageShell';
@@ -9,7 +9,8 @@ import { ResourceState } from '../../../components/ui/ResourceState';
 import { ResourceTable } from '../../../components/ui/ResourceTable';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { getApiErrorMessage } from '../../../services/api/errors';
-import type { CancelPurchaseRequest, CreatePurchaseRequest, PurchaseDto } from '../../../services/api/types';
+import { DEFAULT_PAGE_SIZE } from '../../../services/api/pagination';
+import type { CancelPurchaseRequest, CreatePurchaseRequest, PurchaseDto, PurchaseListItemDto } from '../../../services/api/types';
 import { fetchProducts, fetchProviders } from '../../../services/catalogs/catalogs-api';
 import { cancelPurchase, createPurchase, fetchPurchaseDetail, fetchPurchases } from '../../../services/purchases/purchases-api';
 import { useOperationalStore } from '../../../store/operational-store';
@@ -31,6 +32,16 @@ const purchaseSchema = z.object({
     )
     .min(1, 'Agrega al menos un item.'),
   observation: z.string().optional(),
+}).superRefine((values, context) => {
+  const requiresDocumentNumber = values.documentType && values.documentType !== 'SIN_DOCUMENTO';
+
+  if (requiresDocumentNumber && !values.documentNumber?.trim()) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'El numero de documento es obligatorio para el tipo de comprobante seleccionado.',
+      path: ['documentNumber'],
+    });
+  }
 });
 
 const cancelPurchaseSchema = z.object({
@@ -59,10 +70,28 @@ type CancelPurchaseFormValues = z.infer<typeof cancelPurchaseSchema>;
 const inputClass =
   'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-500';
 
+const documentTypeOptions = [
+  { value: 'FACTURA', label: 'Factura' },
+  { value: 'BOLETA', label: 'Boleta' },
+  { value: 'TICKET', label: 'Ticket' },
+  { value: 'NOTA_VENTA', label: 'Nota de venta' },
+  { value: 'SIN_DOCUMENTO', label: 'Sin documento' },
+];
+
+const paymentMethodOptions = ['EFECTIVO', 'YAPE', 'PLIN', 'TRANSFERENCIA', 'TARJETA', 'CREDITO'];
+
+function roundCurrency(value: number) {
+  return Number(value.toFixed(2));
+}
+
 export function PurchasePage() {
   const queryClient = useQueryClient();
   const activeContext = useOperationalStore((state) => state.activeContext);
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<string | null>(null);
+  const [lastCreatedPurchase, setLastCreatedPurchase] = useState<PurchaseDto | null>(null);
+  const [purchasesPage, setPurchasesPage] = useState(0);
+  const [purchasesPageSize, setPurchasesPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [purchasesSort, setPurchasesSort] = useState('purchaseDate,desc');
 
   const productsQuery = useQuery({
     queryKey: ['admin', 'productos'],
@@ -77,9 +106,15 @@ export function PurchasePage() {
   });
 
   const purchasesQuery = useQuery({
-    queryKey: ['purchases'],
-    queryFn: fetchPurchases,
+    queryKey: ['purchases', purchasesPage, purchasesPageSize, purchasesSort],
+    queryFn: () =>
+      fetchPurchases({
+        page: purchasesPage,
+        size: purchasesPageSize,
+        sort: purchasesSort,
+      }),
     retry: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const purchaseDetailQuery = useQuery({
@@ -94,6 +129,7 @@ export function PurchasePage() {
     register,
     handleSubmit,
     reset,
+    setValue,
     watch,
     formState: { errors },
   } = useForm<PurchaseFormValues>({
@@ -120,11 +156,51 @@ export function PurchasePage() {
   const itemsFieldArray = useFieldArray({ control, name: 'items' });
   const cancelItemsFieldArray = useFieldArray({ control: cancelForm.control, name: 'cancelledItems' });
   const purchaseItems = watch('items');
-  const estimatedTotal = purchaseItems.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unitCost || 0), 0);
+  const providerId = watch('providerId');
+  const documentType = watch('documentType');
+  const paymentMethod = watch('paymentMethod');
+  const estimatedTotal = roundCurrency(purchaseItems.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unitCost || 0), 0));
+  const products = useMemo(() => (productsQuery.data ?? []).filter((product) => product.active), [productsQuery.data]);
+  const providers = useMemo(() => (providersQuery.data ?? []).filter((provider) => provider.active), [providersQuery.data]);
+  const productMap = useMemo(() => new Map(products.map((product) => [Number(product.id), product])), [products]);
+
+  const itemRowMessages = purchaseItems.map((item) => {
+    const product = productMap.get(Number(item.productId));
+    const quantity = Number(item.quantity || 0);
+    const unitCost = Number(item.unitCost || 0);
+    const issues: string[] = [];
+
+    if (!product) {
+      return {
+        helper: 'Selecciona un producto para registrar cantidad, costo unitario y subtotal.',
+        issues,
+        subtotal: 0,
+      };
+    }
+
+    if (quantity <= 0) {
+      issues.push('La cantidad debe ser mayor a cero.');
+    }
+
+    if (unitCost <= 0) {
+      issues.push('El costo unitario debe ser mayor a cero.');
+    }
+
+    return {
+      helper: `Costo referencial del catalogo: ${formatCurrency(product.referenceCost)}. Unidad: ${product.unitOfMeasure}. Esta compra actualizara el stock del producto al registrarse.`,
+      issues,
+      subtotal: roundCurrency(quantity * unitCost),
+    };
+  });
+
+  const hasItemIssues = itemRowMessages.some((row) => row.issues.length > 0);
+  const hasIncompleteItem = purchaseItems.some((item) => Number(item.productId) <= 0);
 
   const createMutation = useMutation({
     mutationFn: (payload: CreatePurchaseRequest) => createPurchase(payload),
-    onSuccess: () => {
+    onSuccess: (purchase) => {
+      setLastCreatedPurchase(purchase);
+      setSelectedPurchaseId(String(purchase.id));
       reset({
         providerId: 0,
         purchaseDate: new Date().toISOString().slice(0, 10),
@@ -162,14 +238,37 @@ export function PurchasePage() {
     });
   }, [cancelForm, purchaseDetailQuery.data]);
 
+  useEffect(() => {
+    purchaseItems.forEach((item, index) => {
+      const product = productMap.get(Number(item.productId));
+      if (!product) {
+        return;
+      }
+
+      const currentCost = Number(item.unitCost || 0);
+      if (currentCost <= 0) {
+        setValue(`items.${index}.unitCost`, Number(product.referenceCost), {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+    });
+  }, [productMap, purchaseItems, setValue]);
+
   if (!activeContext) {
     return <ResourceState body="Selecciona un contexto operativo antes de registrar compras." title="Contexto pendiente" tone="warning" />;
   }
 
-  const products = (productsQuery.data ?? []).filter((product) => product.active);
-  const providers = (providersQuery.data ?? []).filter((provider) => provider.active);
-  const purchases = purchasesQuery.data ?? [];
-  const selectedPurchase = purchaseDetailQuery.data ?? purchases.find((purchase) => String(purchase.id) === selectedPurchaseId) ?? null;
+  const purchases = purchasesQuery.data?.items ?? [];
+  const selectedPurchase = purchaseDetailQuery.data ?? null;
+  const canSubmitPurchase =
+    providerId > 0 &&
+    Boolean(paymentMethod?.trim()) &&
+    purchaseItems.length > 0 &&
+    !hasIncompleteItem &&
+    !hasItemIssues &&
+    estimatedTotal > 0 &&
+    !createMutation.isPending;
 
   return (
     <ResourcePageShell
@@ -189,12 +288,24 @@ export function PurchasePage() {
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
         <div className="mb-5">
           <h2 className="text-lg font-semibold text-slate-950">Registrar compra</h2>
-          <p className="mt-2 text-sm text-slate-600">La compra se enviara con contexto, proveedor, fecha e items alineados al contrato real.</p>
+          <p className="mt-2 text-sm text-slate-600">Completa proveedor, comprobante, metodo de pago e items para registrar la compra con un resumen claro antes de guardar.</p>
+          <div className="mt-4 rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-slate-700">
+            Al registrar la compra se actualizara el stock de los productos seleccionados. Hoy el backend soporta registro, consulta y anulacion parcial o total por items; no expone edicion ni eliminacion fisica.
+          </div>
         </div>
 
         <form
           className="space-y-6"
-          onSubmit={handleSubmit((values) =>
+          onSubmit={handleSubmit((values) => {
+            const providerName = providers.find((provider) => Number(provider.id) === Number(values.providerId))?.name ?? 'Proveedor seleccionado';
+            const shouldContinue = window.confirm(
+              `¿Confirmas registrar esta compra?\nProveedor: ${providerName}\nTotal: ${formatCurrency(estimatedTotal)}\nItems: ${values.items.length}\nMetodo de pago: ${values.paymentMethod ?? 'No definido'}`,
+            );
+
+            if (!shouldContinue) {
+              return;
+            }
+
             createMutation.mutate({
               operationalContextId: Number(activeContext.id),
               providerId: values.providerId,
@@ -204,8 +315,8 @@ export function PurchasePage() {
               paymentMethod: values.paymentMethod,
               items: values.items,
               observation: values.observation,
-            }),
-          )}
+            });
+          })}
         >
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-2">
@@ -218,23 +329,50 @@ export function PurchasePage() {
                   </option>
                 ))}
               </select>
+              <p className="text-xs text-slate-500">Selecciona el proveedor responsable de la compra. Este campo es obligatorio.</p>
               {errors.providerId ? <span className="text-xs text-rose-600">{errors.providerId.message}</span> : null}
             </label>
             <label className="space-y-2">
               <span className="text-sm font-medium text-slate-700">Fecha de compra</span>
               <input className={inputClass} type="date" {...register('purchaseDate')} />
+              <p className="text-xs text-slate-500">Fecha efectiva en la que se realizo la compra al proveedor.</p>
             </label>
             <label className="space-y-2">
               <span className="text-sm font-medium text-slate-700">Tipo de documento</span>
-              <input className={inputClass} {...register('documentType')} />
+              <select className={inputClass} {...register('documentType')}>
+                {documentTypeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-500">Selecciona el comprobante entregado por el proveedor. Este catalogo hoy se resuelve desde frontend.</p>
             </label>
             <label className="space-y-2">
               <span className="text-sm font-medium text-slate-700">Numero de documento</span>
-              <input className={inputClass} {...register('documentNumber')} />
+              <input
+                className={inputClass}
+                placeholder={documentType === 'SIN_DOCUMENTO' ? 'Opcional si no existe comprobante.' : 'Ej. F001-123456'}
+                {...register('documentNumber')}
+              />
+              <p className="text-xs text-slate-500">
+                {documentType === 'SIN_DOCUMENTO'
+                  ? 'Si no hay comprobante, puedes dejarlo vacio, pero se recomienda explicar el caso en observacion.'
+                  : 'Obligatorio para el tipo de documento seleccionado.'}
+              </p>
+              {errors.documentNumber ? <span className="text-xs text-rose-600">{errors.documentNumber.message}</span> : null}
             </label>
             <label className="space-y-2 md:col-span-2">
               <span className="text-sm font-medium text-slate-700">Metodo de pago</span>
-              <input className={inputClass} {...register('paymentMethod')} />
+              <select className={inputClass} {...register('paymentMethod')}>
+                {paymentMethodOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-500">Indica como se pago la compra. Si negocio define compras pendientes, este campo podria ampliarse luego con estado de pago.</p>
+              {errors.paymentMethod ? <span className="text-xs text-rose-600">{errors.paymentMethod.message}</span> : null}
             </label>
           </div>
 
@@ -249,26 +387,73 @@ export function PurchasePage() {
                 Agregar item
               </button>
             </div>
+            <div className="hidden rounded-2xl bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 md:grid md:grid-cols-[1.4fr_0.6fr_0.7fr_0.8fr_auto]">
+              <span>Producto</span>
+              <span>Cantidad</span>
+              <span>Costo unitario</span>
+              <span>Subtotal</span>
+              <span>Accion</span>
+            </div>
             <div className="space-y-3">
               {itemsFieldArray.fields.map((field, index) => (
-                <div key={field.id} className="grid gap-3 rounded-3xl border border-slate-200 p-4 md:grid-cols-[1.4fr_0.6fr_0.7fr_auto]">
-                  <select className={inputClass} {...register(`items.${index}.productId`)}>
-                    <option value={0}>Selecciona un producto</option>
-                    {products.map((product) => (
-                      <option key={product.id} value={Number(product.id)}>
-                        {product.name} ({product.code})
-                      </option>
+                <div key={field.id} className="rounded-3xl border border-slate-200 p-4">
+                  <div className="grid gap-3 md:grid-cols-[1.4fr_0.6fr_0.7fr_0.8fr_auto]">
+                    <label className="space-y-2">
+                      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 md:hidden">Producto</span>
+                      <select
+                        className={inputClass}
+                        {...register(`items.${index}.productId`, {
+                          onChange: (event) => {
+                            const selectedProduct = productMap.get(Number(event.target.value));
+                            if (!selectedProduct) {
+                              return;
+                            }
+
+                            setValue(`items.${index}.unitCost`, Number(selectedProduct.referenceCost), {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            });
+                          },
+                        })}
+                      >
+                        <option value={0}>Selecciona un producto</option>
+                        {products.map((product) => (
+                          <option key={product.id} value={Number(product.id)}>
+                            {product.name} ({product.code})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="space-y-2">
+                      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 md:hidden">Cantidad</span>
+                      <input className={inputClass} min="0.01" placeholder="Ej. 10" step="0.01" type="number" {...register(`items.${index}.quantity`)} />
+                    </label>
+                    <label className="space-y-2">
+                      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 md:hidden">Costo unitario</span>
+                      <input className={inputClass} min="0.01" placeholder="Ej. 12.50" step="0.01" type="number" {...register(`items.${index}.unitCost`)} />
+                    </label>
+                    <div className="space-y-2">
+                      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 md:hidden">Subtotal</span>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900">
+                        {formatCurrency(itemRowMessages[index]?.subtotal ?? 0)}
+                      </div>
+                    </div>
+                    <button
+                      className="rounded-2xl border border-rose-200 px-4 py-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-50"
+                      onClick={() => itemsFieldArray.remove(index)}
+                      type="button"
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                  <div className="mt-3 space-y-1">
+                    <p className="text-xs text-slate-500">{itemRowMessages[index]?.helper}</p>
+                    {itemRowMessages[index]?.issues.map((issue) => (
+                      <p key={issue} className="text-xs text-rose-600">
+                        {issue}
+                      </p>
                     ))}
-                  </select>
-                  <input className={inputClass} step="0.01" type="number" {...register(`items.${index}.quantity`)} />
-                  <input className={inputClass} step="0.01" type="number" {...register(`items.${index}.unitCost`)} />
-                  <button
-                    className="rounded-2xl border border-rose-200 px-4 py-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-50"
-                    onClick={() => itemsFieldArray.remove(index)}
-                    type="button"
-                  >
-                    Quitar
-                  </button>
+                  </div>
                 </div>
               ))}
               {errors.items ? <span className="text-xs text-rose-600">{errors.items.message as string}</span> : null}
@@ -277,8 +462,29 @@ export function PurchasePage() {
 
           <label className="space-y-2">
             <span className="text-sm font-medium text-slate-700">Observacion</span>
-            <textarea className={`${inputClass} min-h-24`} {...register('observation')} />
+            <textarea className={`${inputClass} min-h-24`} placeholder="Dato opcional para ampliar la referencia de la compra o justificar casos sin documento." {...register('observation')} />
           </label>
+
+          <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 md:grid-cols-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Items</p>
+              <p className="mt-1 text-lg font-semibold text-slate-950">{purchaseItems.length}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Subtotal</p>
+              <p className="mt-1 text-lg font-semibold text-slate-950">{formatCurrency(estimatedTotal)}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Total compra</p>
+              <p className="mt-1 text-lg font-semibold text-slate-950">{formatCurrency(estimatedTotal)}</p>
+            </div>
+          </div>
+
+          {!canSubmitPurchase ? (
+            <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              Completa proveedor, comprobante, metodo de pago e items validos para habilitar el guardado de la compra.
+            </div>
+          ) : null}
 
           {createMutation.isError ? (
             <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -286,13 +492,15 @@ export function PurchasePage() {
             </div>
           ) : null}
 
-          {createMutation.isSuccess ? (
-            <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Compra registrada correctamente.</div>
+          {lastCreatedPurchase ? (
+            <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              Compra registrada correctamente. Se actualizo el listado y el stock de los productos involucrados.
+            </div>
           ) : null}
 
           <button
             className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-400"
-            disabled={createMutation.isPending}
+            disabled={!canSubmitPurchase}
             type="submit"
           >
             {createMutation.isPending ? 'Registrando compra...' : 'Guardar compra'}
@@ -312,7 +520,7 @@ export function PurchasePage() {
 
       {!purchasesQuery.isLoading && !purchasesQuery.isError ? (
         <>
-          <ResourceTable<PurchaseDto>
+          <ResourceTable<PurchaseListItemDto>
             columns={[
               {
                 key: 'provider',
@@ -334,26 +542,43 @@ export function PurchasePage() {
                   />
                 ),
               },
-              { key: 'date', header: 'Fecha', render: (purchase) => formatDate(purchase.purchaseDate) },
-              { key: 'total', header: 'Total', render: (purchase) => formatCurrency(purchase.totalAmount) },
-              { key: 'items', header: 'Items', render: (purchase) => `${purchase.items.length} item(s)` },
+              { key: 'date', header: 'Fecha', sortable: true, sortKey: 'purchaseDate', render: (purchase) => formatDate(purchase.purchaseDate) },
+              { key: 'total', header: 'Total', sortable: true, sortKey: 'totalAmount', render: (purchase) => formatCurrency(purchase.totalAmount) },
+              { key: 'items', header: 'Items', render: (purchase) => `${purchase.itemsCount ?? 0} item(s)` },
             ]}
+            emptyState={<p className="text-sm text-slate-500">No hay compras registradas con los criterios actuales.</p>}
+            isLoading={purchasesQuery.isFetching}
+            onPageChange={setPurchasesPage}
+            onPageSizeChange={(nextSize) => {
+              setPurchasesPageSize(nextSize);
+              setPurchasesPage(0);
+            }}
+            pagination={purchasesQuery.data}
             rowKey={(purchase) => String(purchase.id)}
             rows={purchases}
+            sort={{
+              value: purchasesSort,
+              onChange: (nextSort) => {
+                setPurchasesSort(nextSort);
+                setPurchasesPage(0);
+              },
+            }}
           />
 
-          {selectedPurchase ? (
+          {selectedPurchaseId ? (
             <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
               <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-lg font-semibold text-slate-950">Detalle de compra #{selectedPurchase.id}</h2>
-                    <p className="mt-1 text-sm text-slate-600">{selectedPurchase.providerName ?? 'Proveedor no disponible'}</p>
+                    <h2 className="text-lg font-semibold text-slate-950">Detalle de compra #{selectedPurchase?.id ?? selectedPurchaseId}</h2>
+                    <p className="mt-1 text-sm text-slate-600">{selectedPurchase?.providerName ?? 'Proveedor no disponible'}</p>
                   </div>
-                  <StatusBadge
-                    label={selectedPurchase.status}
-                    tone={selectedPurchase.status === 'REGISTRADA' ? 'success' : selectedPurchase.status === 'ANULADA_PARCIAL' ? 'warning' : 'danger'}
-                  />
+                  {selectedPurchase ? (
+                    <StatusBadge
+                      label={selectedPurchase.status}
+                      tone={selectedPurchase.status === 'REGISTRADA' ? 'success' : selectedPurchase.status === 'ANULADA_PARCIAL' ? 'warning' : 'danger'}
+                    />
+                  ) : null}
                 </div>
 
                 {purchaseDetailQuery.isLoading ? <p className="mt-4 text-sm text-slate-600">Cargando detalle...</p> : null}
@@ -363,33 +588,37 @@ export function PurchasePage() {
                   </div>
                 ) : null}
 
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  <MetricCard helper="Subtotal de la compra." label="Subtotal" value={formatCurrency(selectedPurchase.subtotalAmount)} />
-                  <MetricCard helper="Total consolidado por backend." label="Total" value={formatCurrency(selectedPurchase.totalAmount)} />
-                  <MetricCard helper="Fecha real de compra." label="Fecha" value={formatDate(selectedPurchase.purchaseDate)} />
-                  <MetricCard helper="Creacion registrada por backend." label="Creada" value={formatDateTime(selectedPurchase.createdAt)} />
-                </div>
+                {selectedPurchase ? (
+                  <>
+                    <div className="mt-5 grid gap-4 md:grid-cols-2">
+                      <MetricCard helper="Subtotal de la compra." label="Subtotal" value={formatCurrency(selectedPurchase.subtotalAmount)} />
+                      <MetricCard helper="Total consolidado por backend." label="Total" value={formatCurrency(selectedPurchase.totalAmount)} />
+                      <MetricCard helper="Fecha real de compra." label="Fecha" value={formatDate(selectedPurchase.purchaseDate)} />
+                      <MetricCard helper="Creacion registrada por backend." label="Creada" value={formatDateTime(selectedPurchase.createdAt)} />
+                    </div>
 
-                <div className="mt-6 space-y-3">
-                  {selectedPurchase.items.map((item) => {
-                    const remaining = Math.max(Number(item.quantity) - Number(item.cancelledQuantity), 0);
-                    return (
-                      <div key={String(item.id)} className="rounded-2xl border border-slate-200 px-4 py-3">
-                        <div className="flex items-center justify-between gap-4">
-                          <p className="font-medium text-slate-900">{item.productName}</p>
-                          <p className="text-sm text-slate-600">{formatCurrency(item.subtotalAmount)}</p>
-                        </div>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {item.productCode} - {item.quantity} unid. | Anulado: {item.cancelledQuantity} | Disponible: {remaining}
-                        </p>
+                    <div className="mt-6 space-y-3">
+                      {selectedPurchase.items.map((item) => {
+                        const remaining = Math.max(Number(item.quantity) - Number(item.cancelledQuantity), 0);
+                        return (
+                          <div key={String(item.id)} className="rounded-2xl border border-slate-200 px-4 py-3">
+                            <div className="flex items-center justify-between gap-4">
+                              <p className="font-medium text-slate-900">{item.productName}</p>
+                              <p className="text-sm text-slate-600">{formatCurrency(item.subtotalAmount)}</p>
+                            </div>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {item.productCode} - {item.quantity} unid. | Anulado: {item.cancelledQuantity} | Disponible: {remaining}
+                            </p>
+                          </div>
+                        );
+                      })}
+                      <div className="text-sm text-slate-600">
+                        <p><span className="font-medium text-slate-900">Observacion:</span> {selectedPurchase.observation ?? 'Sin observacion'}</p>
+                        <p><span className="font-medium text-slate-900">Motivo de anulacion:</span> {selectedPurchase.cancellationReason ?? 'No aplica'}</p>
                       </div>
-                    );
-                  })}
-                  <div className="text-sm text-slate-600">
-                    <p><span className="font-medium text-slate-900">Observacion:</span> {selectedPurchase.observation ?? 'Sin observacion'}</p>
-                    <p><span className="font-medium text-slate-900">Motivo de anulacion:</span> {selectedPurchase.cancellationReason ?? 'No aplica'}</p>
-                  </div>
-                </div>
+                    </div>
+                  </>
+                ) : null}
               </article>
 
               <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
@@ -406,7 +635,7 @@ export function PurchasePage() {
                   )}
                 >
                   <div className="space-y-3">
-                    {cancelItemsFieldArray.fields.map((field, index) => {
+                    {selectedPurchase ? cancelItemsFieldArray.fields.map((field, index) => {
                       const detailItem = selectedPurchase.items.find((item) => Number(item.id) === Number(field.purchaseItemId));
                       const availableQuantity = detailItem
                         ? Math.max(Number(detailItem.quantity) - Number(detailItem.cancelledQuantity), 0)
@@ -428,7 +657,7 @@ export function PurchasePage() {
                           />
                         </div>
                       );
-                    })}
+                    }) : null}
                   </div>
 
                   <label className="space-y-2">
@@ -451,7 +680,7 @@ export function PurchasePage() {
 
                   <button
                     className="w-full rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-400"
-                    disabled={cancelMutation.isPending || selectedPurchase.status === 'ANULADA'}
+                    disabled={cancelMutation.isPending || selectedPurchase?.status === 'ANULADA'}
                     type="submit"
                   >
                     {cancelMutation.isPending ? 'Procesando anulacion...' : 'Aplicar anulacion'}

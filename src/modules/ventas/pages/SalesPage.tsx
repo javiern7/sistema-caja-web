@@ -9,7 +9,8 @@ import { ResourceState } from '../../../components/ui/ResourceState';
 import { ResourceTable } from '../../../components/ui/ResourceTable';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { getApiErrorMessage } from '../../../services/api/errors';
-import type { CreateSaleRequest, SaleDto } from '../../../services/api/types';
+import { DEFAULT_PAGE_SIZE } from '../../../services/api/pagination';
+import type { CreateSaleRequest, SaleDto, SaleListItemDto } from '../../../services/api/types';
 import { fetchProducts } from '../../../services/catalogs/catalogs-api';
 import { cancelSale, createSale, fetchSaleDetail, fetchSales } from '../../../services/sales/sales-api';
 import { fetchCurrentStock } from '../../../services/stock/stock-api';
@@ -80,6 +81,9 @@ export function SalesPage() {
   const activeCash = useOperationalStore((state) => state.activeCash);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [lastCreatedSale, setLastCreatedSale] = useState<SaleDto | null>(null);
+  const [salesPage, setSalesPage] = useState(0);
+  const [salesPageSize, setSalesPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [salesSort, setSalesSort] = useState('createdAt,desc');
 
   const productsQuery = useQuery({
     queryKey: ['admin', 'productos'],
@@ -94,9 +98,15 @@ export function SalesPage() {
   });
 
   const salesQuery = useQuery({
-    queryKey: ['sales'],
-    queryFn: fetchSales,
+    queryKey: ['sales', salesPage, salesPageSize, salesSort],
+    queryFn: () =>
+      fetchSales({
+        page: salesPage,
+        size: salesPageSize,
+        sort: salesSort,
+      }),
     retry: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const saleDetailQuery = useQuery({
@@ -243,10 +253,6 @@ export function SalesPage() {
         payments: [{ paymentMethod: 'EFECTIVO', amount: 0 }],
         observation: '',
       });
-      queryClient.setQueryData<SaleDto[]>(['sales'], (currentSales) => {
-        const nextSales = currentSales ?? [];
-        return [sale, ...nextSales.filter((currentSale) => Number(currentSale.id) !== Number(sale.id))];
-      });
       queryClient.setQueryData(['sales', 'detail', String(sale.id)], sale);
       queryClient.invalidateQueries({ queryKey: ['sales'] });
       queryClient.invalidateQueries({ queryKey: ['cash-box', 'summary'] });
@@ -289,8 +295,8 @@ export function SalesPage() {
     );
   }
 
-  const sales = salesQuery.data ?? [];
-  const selectedSale = saleDetailQuery.data ?? sales.find((sale) => String(sale.id) === selectedSaleId) ?? null;
+  const sales = salesQuery.data?.items ?? [];
+  const selectedSale = saleDetailQuery.data ?? null;
 
   return (
     <ResourcePageShell
@@ -585,11 +591,13 @@ export function SalesPage() {
 
       {!salesQuery.isLoading && !salesQuery.isError ? (
         <>
-          <ResourceTable<SaleDto>
+          <ResourceTable<SaleListItemDto>
             columns={[
               {
                 key: 'receipt',
                 header: 'Comprobante',
+                sortable: true,
+                sortKey: 'internalReceiptNumber',
                 render: (sale) => (
                   <button className="text-left" onClick={() => setSelectedSaleId(String(sale.id))} type="button">
                     <p className="font-medium text-slate-900">{`${sale.internalReceiptSeries ?? 'INT'}-${sale.internalReceiptNumber ?? sale.id}`}</p>
@@ -602,15 +610,17 @@ export function SalesPage() {
                 header: 'Estado',
                 render: (sale) => <StatusBadge label={sale.status} tone={sale.status === 'ANULADA' ? 'warning' : 'success'} />,
               },
-              { key: 'total', header: 'Total', render: (sale) => formatCurrency(sale.totalAmount) },
+              { key: 'total', header: 'Total', sortable: true, sortKey: 'totalAmount', render: (sale) => formatCurrency(sale.totalAmount) },
               {
                 key: 'items',
                 header: 'Items',
-                render: (sale) => `${sale.items.length} item(s)`,
+                render: (sale) => `${sale.itemsCount ?? 0} item(s)`,
               },
               {
                 key: 'audit',
                 header: 'Registrada',
+                sortable: true,
+                sortKey: 'createdAt',
                 render: (sale) => (
                   <div>
                     <p>{sale.soldByUsername ?? 'No disponible'}</p>
@@ -619,19 +629,36 @@ export function SalesPage() {
                 ),
               },
             ]}
+            emptyState={<p className="text-sm text-slate-500">No hay ventas registradas con los criterios actuales.</p>}
+            isLoading={salesQuery.isFetching}
+            onPageChange={setSalesPage}
+            onPageSizeChange={(nextSize) => {
+              setSalesPageSize(nextSize);
+              setSalesPage(0);
+            }}
+            pagination={salesQuery.data}
             rowKey={(sale) => String(sale.id)}
             rows={sales}
+            sort={{
+              value: salesSort,
+              onChange: (nextSort) => {
+                setSalesSort(nextSort);
+                setSalesPage(0);
+              },
+            }}
           />
 
-          {selectedSale ? (
+          {selectedSaleId ? (
             <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
               <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-lg font-semibold text-slate-950">Detalle de venta #{selectedSale.id}</h2>
-                    <p className="mt-1 text-sm text-slate-600">{selectedSale.operationalContextName ?? activeContext.name}</p>
+                    <h2 className="text-lg font-semibold text-slate-950">Detalle de venta #{selectedSale?.id ?? selectedSaleId}</h2>
+                    <p className="mt-1 text-sm text-slate-600">{selectedSale?.operationalContextName ?? activeContext.name}</p>
                   </div>
-                  <StatusBadge label={selectedSale.status} tone={selectedSale.status === 'ANULADA' ? 'warning' : 'success'} />
+                  {selectedSale ? (
+                    <StatusBadge label={selectedSale.status} tone={selectedSale.status === 'ANULADA' ? 'warning' : 'success'} />
+                  ) : null}
                 </div>
 
                 {saleDetailQuery.isLoading ? <p className="mt-4 text-sm text-slate-600">Cargando detalle...</p> : null}
@@ -641,48 +668,52 @@ export function SalesPage() {
                   </div>
                 ) : null}
 
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  <MetricCard helper="Subtotal informado por backend." label="Subtotal" value={formatCurrency(selectedSale.subtotalAmount)} />
-                  <MetricCard helper="Total de la venta." label="Total" value={formatCurrency(selectedSale.totalAmount)} />
-                  <MetricCard helper="Caja asociada a la operacion." label="Caja" value={String(selectedSale.cashBoxId)} />
-                  <MetricCard helper="Fecha real de registro." label="Creada" value={formatDateTime(selectedSale.createdAt)} />
-                </div>
-
-                <div className="mt-6 space-y-4">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">Items</p>
-                    <div className="mt-3 space-y-3">
-                      {selectedSale.items.map((item) => (
-                        <div key={String(item.id)} className="rounded-2xl border border-slate-200 px-4 py-3">
-                          <div className="flex items-center justify-between gap-4">
-                            <p className="font-medium text-slate-900">{item.productName}</p>
-                            <p className="text-sm text-slate-600">{formatCurrency(item.subtotalAmount)}</p>
-                          </div>
-                          <p className="mt-1 text-xs text-slate-500">{item.productCode} - {item.quantity} x {formatCurrency(item.unitPrice)}</p>
-                        </div>
-                      ))}
+                {selectedSale ? (
+                  <>
+                    <div className="mt-5 grid gap-4 md:grid-cols-2">
+                      <MetricCard helper="Subtotal informado por backend." label="Subtotal" value={formatCurrency(selectedSale.subtotalAmount)} />
+                      <MetricCard helper="Total de la venta." label="Total" value={formatCurrency(selectedSale.totalAmount)} />
+                      <MetricCard helper="Caja asociada a la operacion." label="Caja" value={String(selectedSale.cashBoxId)} />
+                      <MetricCard helper="Fecha real de registro." label="Creada" value={formatDateTime(selectedSale.createdAt)} />
                     </div>
-                  </div>
 
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">Pagos</p>
-                    <div className="mt-3 space-y-3">
-                      {selectedSale.payments.map((payment) => (
-                        <div key={String(payment.id)} className="rounded-2xl border border-slate-200 px-4 py-3">
-                          <div className="flex items-center justify-between gap-4">
-                            <p className="font-medium text-slate-900">{payment.paymentMethod}</p>
-                            <p className="text-sm text-slate-600">{formatCurrency(payment.amount)}</p>
-                          </div>
+                    <div className="mt-6 space-y-4">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Items</p>
+                        <div className="mt-3 space-y-3">
+                          {selectedSale.items.map((item) => (
+                            <div key={String(item.id)} className="rounded-2xl border border-slate-200 px-4 py-3">
+                              <div className="flex items-center justify-between gap-4">
+                                <p className="font-medium text-slate-900">{item.productName}</p>
+                                <p className="text-sm text-slate-600">{formatCurrency(item.subtotalAmount)}</p>
+                              </div>
+                              <p className="mt-1 text-xs text-slate-500">{item.productCode} - {item.quantity} x {formatCurrency(item.unitPrice)}</p>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                      </div>
 
-                  <div className="text-sm text-slate-600">
-                    <p><span className="font-medium text-slate-900">Observacion:</span> {selectedSale.observation ?? 'Sin observacion'}</p>
-                    <p><span className="font-medium text-slate-900">Motivo de anulacion:</span> {selectedSale.cancellationReason ?? 'No aplica'}</p>
-                  </div>
-                </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Pagos</p>
+                        <div className="mt-3 space-y-3">
+                          {selectedSale.payments.map((payment) => (
+                            <div key={String(payment.id)} className="rounded-2xl border border-slate-200 px-4 py-3">
+                              <div className="flex items-center justify-between gap-4">
+                                <p className="font-medium text-slate-900">{payment.paymentMethod}</p>
+                                <p className="text-sm text-slate-600">{formatCurrency(payment.amount)}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="text-sm text-slate-600">
+                        <p><span className="font-medium text-slate-900">Observacion:</span> {selectedSale.observation ?? 'Sin observacion'}</p>
+                        <p><span className="font-medium text-slate-900">Motivo de anulacion:</span> {selectedSale.cancellationReason ?? 'No aplica'}</p>
+                      </div>
+                    </div>
+                  </>
+                ) : null}
               </article>
 
               <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
@@ -716,7 +747,7 @@ export function SalesPage() {
 
                   <button
                     className="w-full rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-400"
-                    disabled={!hasPermission('venta.anular') || selectedSale.status === 'ANULADA' || cancelMutation.isPending}
+                    disabled={!hasPermission('venta.anular') || selectedSale?.status === 'ANULADA' || cancelMutation.isPending}
                     type="submit"
                   >
                     {cancelMutation.isPending ? 'Anulando venta...' : 'Anular venta'}

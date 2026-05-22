@@ -1,12 +1,37 @@
 import { httpClient } from '../api/httpClient';
-import type { ApiResponse, StockCurrentDto, StockMovementDto } from '../api/types';
+import { buildQueryString, fetchAllPages, SELECTOR_PAGE_SIZE } from '../api/pagination';
+import type {
+  ApiResponse,
+  PaginatedResponse,
+  PaginationParams,
+  StockCurrentDto,
+  StockMovementDto,
+} from '../api/types';
+
+export async function fetchCurrentStockPage(params: PaginationParams = {}) {
+  const response = await httpClient.get<ApiResponse<PaginatedResponse<StockCurrentDto>>>(
+    `/stock${buildQueryString(params)}`,
+  );
+  return response.data;
+}
 
 export async function fetchCurrentStock() {
-  const response = await httpClient.get<ApiResponse<StockCurrentDto[]>>('/stock');
+  return fetchAllPages((params) => fetchCurrentStockPage(params), {
+    size: SELECTOR_PAGE_SIZE,
+    sort: 'productCode,asc',
+  });
+}
+
+export async function fetchStockMovementsPage(params: PaginationParams = {}) {
+  const response = await httpClient.get<ApiResponse<PaginatedResponse<StockMovementDto>>>(
+    `/stock/movimientos${buildQueryString(params)}`,
+  );
   return response.data;
 }
 
 export async function fetchStockMovements() {
-  const response = await httpClient.get<ApiResponse<StockMovementDto[]>>('/stock/movimientos');
-  return response.data;
+  return fetchAllPages((params) => fetchStockMovementsPage(params), {
+    size: SELECTOR_PAGE_SIZE,
+    sort: 'occurredAt,desc',
+  });
 }

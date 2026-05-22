@@ -11,6 +11,25 @@ export type ApiResponse<T> = {
   error?: ApiErrorPayload;
 };
 
+export type SortDirection = 'asc' | 'desc';
+
+export type PaginationParams = {
+  page?: number;
+  size?: number;
+  sort?: string;
+};
+
+export type PaginatedResponse<T> = {
+  items: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+  sort?: string | string[] | Record<string, unknown>;
+};
+
 export type AuthApiUser = {
   id: string | number;
   username?: string;
@@ -279,6 +298,10 @@ export type SaleDto = {
   payments: SalePaymentDto[];
 };
 
+export type SaleListItemDto = Omit<SaleDto, 'items' | 'payments'> & {
+  itemsCount?: number;
+};
+
 export type PurchaseItemRequest = {
   productId: number;
   quantity: number;
@@ -336,6 +359,10 @@ export type PurchaseDto = {
   cancelledByUsername?: string;
   cancellationReason?: string;
   items: PurchaseItemDto[];
+};
+
+export type PurchaseListItemDto = Omit<PurchaseDto, 'items'> & {
+  itemsCount?: number;
 };
 
 export type CreateExpenseRequest = {

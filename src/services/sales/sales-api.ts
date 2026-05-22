@@ -1,8 +1,19 @@
 import { httpClient } from '../api/httpClient';
-import type { ApiResponse, CancelSaleRequest, CreateSaleRequest, SaleDto } from '../api/types';
+import { buildQueryString } from '../api/pagination';
+import type {
+  ApiResponse,
+  CancelSaleRequest,
+  CreateSaleRequest,
+  PaginatedResponse,
+  PaginationParams,
+  SaleDto,
+  SaleListItemDto,
+} from '../api/types';
 
-export async function fetchSales() {
-  const response = await httpClient.get<ApiResponse<SaleDto[]>>('/ventas');
+export async function fetchSales(params: PaginationParams = {}) {
+  const response = await httpClient.get<ApiResponse<PaginatedResponse<SaleListItemDto>>>(
+    `/ventas${buildQueryString(params)}`,
+  );
   return response.data;
 }
 

@@ -1,21 +1,42 @@
 import { httpClient } from '../api/httpClient';
+import { buildQueryString, fetchAllPages, SELECTOR_PAGE_SIZE } from '../api/pagination';
 import type {
   ApiResponse,
   CreateProductRequest,
   CreateProviderRequest,
+  PaginatedResponse,
+  PaginationParams,
   ProductDto,
   ProviderDto,
   UpdateProviderRequest,
 } from '../api/types';
 
+export async function fetchProductsPage(params: PaginationParams = {}) {
+  const response = await httpClient.get<ApiResponse<PaginatedResponse<ProductDto>>>(
+    `/productos${buildQueryString(params)}`,
+  );
+  return response.data;
+}
+
 export async function fetchProducts() {
-  const response = await httpClient.get<ApiResponse<ProductDto[]>>('/productos');
+  return fetchAllPages((params) => fetchProductsPage(params), {
+    size: SELECTOR_PAGE_SIZE,
+    sort: 'name,asc',
+  });
+}
+
+export async function fetchProvidersPage(params: PaginationParams = {}) {
+  const response = await httpClient.get<ApiResponse<PaginatedResponse<ProviderDto>>>(
+    `/proveedores${buildQueryString(params)}`,
+  );
   return response.data;
 }
 
 export async function fetchProviders() {
-  const response = await httpClient.get<ApiResponse<ProviderDto[]>>('/proveedores');
-  return response.data;
+  return fetchAllPages((params) => fetchProvidersPage(params), {
+    size: SELECTOR_PAGE_SIZE,
+    sort: 'name,asc',
+  });
 }
 
 export async function createProduct(payload: CreateProductRequest) {

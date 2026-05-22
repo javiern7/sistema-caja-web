@@ -9,8 +9,9 @@ import { ResourceState } from '../../../components/ui/ResourceState';
 import { ResourceTable } from '../../../components/ui/ResourceTable';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { getApiErrorMessage } from '../../../services/api/errors';
+import { DEFAULT_PAGE_SIZE } from '../../../services/api/pagination';
 import type { CreateProviderRequest, ProviderDto, UpdateProviderRequest } from '../../../services/api/types';
-import { createProvider, fetchProviders, updateProvider } from '../../../services/catalogs/catalogs-api';
+import { createProvider, fetchProvidersPage, updateProvider } from '../../../services/catalogs/catalogs-api';
 
 const providerSchema = z.object({
   name: z.string().min(1, 'Ingresa el nombre del proveedor.'),
@@ -27,10 +28,14 @@ const inputClass = 'w-full rounded-2xl border border-slate-200 bg-white px-4 py-
 export function ProvidersPage() {
   const queryClient = useQueryClient();
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [sort, setSort] = useState('name,asc');
   const providersQuery = useQuery({
-    queryKey: ['admin', 'proveedores'],
-    queryFn: fetchProviders,
+    queryKey: ['admin', 'proveedores', page, pageSize, sort],
+    queryFn: () => fetchProvidersPage({ page, size: pageSize, sort }),
     retry: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const createForm = useForm<ProviderFormValues>({
@@ -64,7 +69,7 @@ export function ProvidersPage() {
     },
   });
 
-  const providers = providersQuery.data ?? [];
+  const providers = providersQuery.data?.items ?? [];
   const selectedProvider = providers.find((provider) => String(provider.id) === selectedProviderId) ?? null;
   const activeProviders = providers.filter((provider) => provider.active).length;
 
@@ -91,7 +96,7 @@ export function ProvidersPage() {
       documents={['04 - HU-COM-001', '18 - API-PRV-001/API-PRV-002/API-PRV-003', '25 - Orquestador Fase 1']}
       summary={
         <div className="grid gap-4 md:grid-cols-3">
-          <MetricCard helper="Datos entregados por tu backend actual." label="Proveedores" value={String(providers.length)} />
+          <MetricCard helper="Datos entregados por tu backend actual." label="Proveedores" value={String(providersQuery.data?.totalElements ?? providers.length)} />
           <MetricCard helper="Disponibles para compras operativas." label="Activos" value={String(activeProviders)} />
           <MetricCard helper="Listos para enlazar con compras." label="Contactos visibles" value={String(providers.filter((provider) => provider.contactName).length)} />
         </div>
@@ -128,6 +133,8 @@ export function ProvidersPage() {
               {
                 key: 'name',
                 header: 'Proveedor',
+                sortable: true,
+                sortKey: 'name',
                 render: (provider) => (
                   <div className="text-left">
                     <p className="font-medium text-slate-900">{provider.name}</p>
@@ -138,6 +145,8 @@ export function ProvidersPage() {
               {
                 key: 'contact',
                 header: 'Contacto',
+                sortable: true,
+                sortKey: 'contactName',
                 render: (provider) => (
                   <div>
                     <p>{provider.contactName ?? 'No definido'}</p>
@@ -148,6 +157,8 @@ export function ProvidersPage() {
               {
                 key: 'status',
                 header: 'Estado',
+                sortable: true,
+                sortKey: 'active',
                 render: (provider) => <StatusBadge label={provider.active ? 'Activo' : 'Inactivo'} tone={provider.active ? 'success' : 'warning'} />,
               },
               {
@@ -195,11 +206,26 @@ export function ProvidersPage() {
                 },
               },
             ]}
+            emptyState={<p className="text-sm text-slate-500">No hay proveedores para mostrar con el criterio actual.</p>}
+            isLoading={providersQuery.isFetching}
+            onPageChange={setPage}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize);
+              setPage(0);
+            }}
+            pagination={providersQuery.data}
             rowClassName={(provider) =>
               String(provider.id) === selectedProviderId ? 'align-top bg-brand-50/50 ring-1 ring-inset ring-brand-100' : 'align-top'
             }
             rowKey={(provider) => String(provider.id)}
             rows={providers}
+            sort={{
+              value: sort,
+              onChange: (nextSort) => {
+                setSort(nextSort);
+                setPage(0);
+              },
+            }}
           />
           {selectedProvider ? (
             <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">

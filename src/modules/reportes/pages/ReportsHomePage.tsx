@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { MetricCard } from '../../../components/ui/MetricCard';
 import { ResourcePageShell } from '../../../components/ui/ResourcePageShell';
@@ -6,6 +6,7 @@ import { ResourceState } from '../../../components/ui/ResourceState';
 import { ResourceTable } from '../../../components/ui/ResourceTable';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { getApiErrorMessage } from '../../../services/api/errors';
+import { DEFAULT_PAGE_SIZE } from '../../../services/api/pagination';
 import type {
   AuditOperationDto,
   CashReportRowDto,
@@ -18,11 +19,16 @@ import type {
 import {
   fetchAuditOperations,
   fetchCashReport,
+  fetchCashReportDetail,
   fetchExpenseReport,
+  fetchExpenseReportDetail,
   fetchPurchaseReport,
+  fetchPurchaseReportDetail,
   fetchReportHistory,
   fetchSalesReport,
+  fetchSalesReportDetail,
   fetchStockReport,
+  fetchStockReportDetail,
   fetchSystemHealth,
   fetchUtilityReport,
 } from '../../../services/reports/reports-api';
@@ -65,6 +71,27 @@ export function ReportsHomePage() {
   const [usernameFilter, setUsernameFilter] = useState('');
   const [reportTypeFilter, setReportTypeFilter] = useState('');
   const [generatedByFilter, setGeneratedByFilter] = useState('');
+  const [salesPage, setSalesPage] = useState(0);
+  const [salesPageSize, setSalesPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [salesSort, setSalesSort] = useState('createdAt,desc');
+  const [cashPage, setCashPage] = useState(0);
+  const [cashPageSize, setCashPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [cashSort, setCashSort] = useState('openedAt,desc');
+  const [purchasesPage, setPurchasesPage] = useState(0);
+  const [purchasesPageSize, setPurchasesPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [purchasesSort, setPurchasesSort] = useState('purchaseDate,desc');
+  const [expensesPage, setExpensesPage] = useState(0);
+  const [expensesPageSize, setExpensesPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [expensesSort, setExpensesSort] = useState('expenseDate,desc');
+  const [stockPage, setStockPage] = useState(0);
+  const [stockPageSize, setStockPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [stockSort, setStockSort] = useState('productName,asc');
+  const [historyPage, setHistoryPage] = useState(0);
+  const [historyPageSize, setHistoryPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [historySort, setHistorySort] = useState('generatedAt,desc');
+  const [auditPage, setAuditPage] = useState(0);
+  const [auditPageSize, setAuditPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [auditSort, setAuditSort] = useState('occurredAt,desc');
 
   const canViewAudit = hasPermission('auditoria.consultar');
   const canViewSales = hasPermission('reporte.ver') || hasPermission('reporte.ventas');
@@ -81,15 +108,35 @@ export function ReportsHomePage() {
     operationalContextId: activeContext ? Number(activeContext.id) : undefined,
   };
 
+  useEffect(() => {
+    setSalesPage(0);
+    setCashPage(0);
+    setPurchasesPage(0);
+    setExpensesPage(0);
+    setStockPage(0);
+  }, [dateFrom, dateTo, activeContext?.id]);
+
+  useEffect(() => {
+    setAuditPage(0);
+  }, [moduleFilter, usernameFilter]);
+
+  useEffect(() => {
+    setHistoryPage(0);
+  }, [reportTypeFilter, generatedByFilter]);
+
   const auditQuery = useQuery({
-    queryKey: ['reports', 'audit', moduleFilter, usernameFilter],
+    queryKey: ['reports', 'audit', moduleFilter, usernameFilter, auditPage, auditPageSize, auditSort],
     queryFn: () =>
       fetchAuditOperations({
         module: moduleFilter || undefined,
         username: usernameFilter || undefined,
+        page: auditPage,
+        size: auditPageSize,
+        sort: auditSort,
       }),
     enabled: canViewAudit,
     retry: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const healthQuery = useQuery({
@@ -98,39 +145,81 @@ export function ReportsHomePage() {
     retry: false,
   });
 
-  const salesQuery = useQuery({
+  const salesSummaryQuery = useQuery({
     queryKey: ['reports', 'sales', reportFilters],
     queryFn: () => fetchSalesReport(reportFilters),
     enabled: canViewSales,
     retry: false,
   });
 
-  const cashQuery = useQuery({
+  const salesDetailQuery = useQuery({
+    queryKey: ['reports', 'sales', 'detail', reportFilters, salesPage, salesPageSize, salesSort],
+    queryFn: () => fetchSalesReportDetail({ ...reportFilters, page: salesPage, size: salesPageSize, sort: salesSort }),
+    enabled: canViewSales,
+    retry: false,
+    placeholderData: (previousData) => previousData,
+  });
+
+  const cashSummaryQuery = useQuery({
     queryKey: ['reports', 'cash', reportFilters],
     queryFn: () => fetchCashReport(reportFilters),
     enabled: canViewCash,
     retry: false,
   });
 
-  const purchasesQuery = useQuery({
+  const cashDetailQuery = useQuery({
+    queryKey: ['reports', 'cash', 'detail', reportFilters, cashPage, cashPageSize, cashSort],
+    queryFn: () => fetchCashReportDetail({ ...reportFilters, page: cashPage, size: cashPageSize, sort: cashSort }),
+    enabled: canViewCash,
+    retry: false,
+    placeholderData: (previousData) => previousData,
+  });
+
+  const purchasesSummaryQuery = useQuery({
     queryKey: ['reports', 'purchases', reportFilters],
     queryFn: () => fetchPurchaseReport(reportFilters),
     enabled: canViewPurchases,
     retry: false,
   });
 
-  const expensesQuery = useQuery({
+  const purchasesDetailQuery = useQuery({
+    queryKey: ['reports', 'purchases', 'detail', reportFilters, purchasesPage, purchasesPageSize, purchasesSort],
+    queryFn: () =>
+      fetchPurchaseReportDetail({ ...reportFilters, page: purchasesPage, size: purchasesPageSize, sort: purchasesSort }),
+    enabled: canViewPurchases,
+    retry: false,
+    placeholderData: (previousData) => previousData,
+  });
+
+  const expensesSummaryQuery = useQuery({
     queryKey: ['reports', 'expenses', reportFilters],
     queryFn: () => fetchExpenseReport(reportFilters),
     enabled: canViewExpenses,
     retry: false,
   });
 
-  const stockQuery = useQuery({
+  const expensesDetailQuery = useQuery({
+    queryKey: ['reports', 'expenses', 'detail', reportFilters, expensesPage, expensesPageSize, expensesSort],
+    queryFn: () =>
+      fetchExpenseReportDetail({ ...reportFilters, page: expensesPage, size: expensesPageSize, sort: expensesSort }),
+    enabled: canViewExpenses,
+    retry: false,
+    placeholderData: (previousData) => previousData,
+  });
+
+  const stockSummaryQuery = useQuery({
     queryKey: ['reports', 'stock', reportFilters],
     queryFn: () => fetchStockReport(reportFilters),
     enabled: canViewStock,
     retry: false,
+  });
+
+  const stockDetailQuery = useQuery({
+    queryKey: ['reports', 'stock', 'detail', reportFilters, stockPage, stockPageSize, stockSort],
+    queryFn: () => fetchStockReportDetail({ ...reportFilters, page: stockPage, size: stockPageSize, sort: stockSort }),
+    enabled: canViewStock,
+    retry: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const utilityQuery = useQuery({
@@ -141,18 +230,22 @@ export function ReportsHomePage() {
   });
 
   const historyQuery = useQuery({
-    queryKey: ['reports', 'history', reportTypeFilter, generatedByFilter],
+    queryKey: ['reports', 'history', reportTypeFilter, generatedByFilter, historyPage, historyPageSize, historySort],
     queryFn: () =>
       fetchReportHistory({
         reportType: reportTypeFilter || undefined,
         generatedBy: generatedByFilter || undefined,
+        page: historyPage,
+        size: historyPageSize,
+        sort: historySort,
       }),
     enabled: canViewHistory,
     retry: false,
+    placeholderData: (previousData) => previousData,
   });
 
-  const operations = auditQuery.data ?? [];
-  const historyRows = historyQuery.data ?? [];
+  const operations = auditQuery.data?.items ?? [];
+  const historyRows = historyQuery.data?.items ?? [];
   const availableReportBlocks = [
     canViewAudit,
     canViewSales,
@@ -173,8 +266,8 @@ export function ReportsHomePage() {
         <div className="grid gap-4 md:grid-cols-4">
           <MetricCard helper="Disponibilidad reportada por el backend." label="Backend" value={healthQuery.data?.status ?? 'Sin dato'} />
           <MetricCard helper="Bloques reales de consulta habilitados por permiso." label="Bloques activos" value={String(availableReportBlocks)} />
-          <MetricCard helper="Eventos de auditoria visibles." label="Auditoria" value={String(operations.length)} />
-          <MetricCard helper="Historial de reportes visible." label="Historial" value={String(historyRows.length)} />
+          <MetricCard helper="Eventos de auditoria visibles." label="Auditoria" value={String(auditQuery.data?.totalElements ?? operations.length)} />
+          <MetricCard helper="Historial de reportes visible." label="Historial" value={String(historyQuery.data?.totalElements ?? historyRows.length)} />
         </div>
       }
       title="Auditoría y reportes"
@@ -219,25 +312,27 @@ export function ReportsHomePage() {
 
       {canViewSales ? (
         <ReportPanel
-          badge={salesQuery.isLoading ? 'Cargando' : salesQuery.isError ? 'Error' : 'Listo'}
+          badge={salesSummaryQuery.isLoading ? 'Cargando' : salesSummaryQuery.isError ? 'Error' : 'Listo'}
           description="Contrato real `GET /api/v1/reportes/ventas`."
           title="Reporte de ventas"
-          tone={salesQuery.isError ? 'warning' : salesQuery.isLoading ? 'neutral' : 'success'}
+          tone={salesSummaryQuery.isError ? 'warning' : salesSummaryQuery.isLoading ? 'neutral' : 'success'}
         >
-          {salesQuery.isLoading ? <ResourceState body="Consultando reporte de ventas..." title="Cargando ventas" /> : null}
-          {salesQuery.isError ? <ResourceState body={getApiErrorMessage(salesQuery.error, 'No se pudo consultar el reporte de ventas.')} title="Error en reporte de ventas" tone="danger" /> : null}
-          {salesQuery.data ? (
+          {salesSummaryQuery.isLoading ? <ResourceState body="Consultando reporte de ventas..." title="Cargando ventas" /> : null}
+          {salesSummaryQuery.isError ? <ResourceState body={getApiErrorMessage(salesSummaryQuery.error, 'No se pudo consultar el reporte de ventas.')} title="Error en reporte de ventas" tone="danger" /> : null}
+          {salesSummaryQuery.data ? (
             <>
               <div className="mb-5 grid gap-4 md:grid-cols-3">
-                <MetricCard helper="Ventas efectivas devueltas por el backend." label="Total ventas" value={String(salesQuery.data.totalSales)} />
-                <MetricCard helper="Monto consolidado del reporte." label="Monto" value={formatCurrency(salesQuery.data.totalAmount)} />
-                <MetricCard helper="Filas detalladas incluidas." label="Items" value={String(salesQuery.data.items.length)} />
+                <MetricCard helper="Ventas efectivas devueltas por el backend." label="Total ventas" value={String(salesSummaryQuery.data.totalSales)} />
+                <MetricCard helper="Monto consolidado del reporte." label="Monto" value={formatCurrency(salesSummaryQuery.data.totalAmount)} />
+                <MetricCard helper="Filas detalladas visibles en la pagina actual." label="Filas" value={String(salesDetailQuery.data?.items.length ?? 0)} />
               </div>
               <ResourceTable<SalesReportRowDto>
                 columns={[
                   {
                     key: 'receipt',
                     header: 'Comprobante',
+                    sortable: true,
+                    sortKey: 'internalReceipt',
                     render: (row) => (
                       <div>
                         <p className="font-medium text-slate-900">{row.internalReceipt ?? `Venta ${row.saleId}`}</p>
@@ -246,12 +341,27 @@ export function ReportsHomePage() {
                     ),
                   },
                   { key: 'seller', header: 'Usuario', render: (row) => row.soldByUsername ?? 'No disponible' },
-                  { key: 'date', header: 'Fecha', render: (row) => formatDateTime(row.createdAt) },
-                  { key: 'itemsCount', header: 'Items', render: (row) => String(row.itemsCount) },
-                  { key: 'amount', header: 'Monto', render: (row) => formatCurrency(row.totalAmount) },
+                  { key: 'date', header: 'Fecha', sortable: true, sortKey: 'createdAt', render: (row) => formatDateTime(row.createdAt) },
+                  { key: 'itemsCount', header: 'Items', sortable: true, sortKey: 'itemsCount', render: (row) => String(row.itemsCount) },
+                  { key: 'amount', header: 'Monto', sortable: true, sortKey: 'totalAmount', render: (row) => formatCurrency(row.totalAmount) },
                 ]}
+                emptyState={<p className="text-sm text-slate-500">No hay filas de detalle para el periodo y contexto elegidos.</p>}
+                isLoading={salesDetailQuery.isFetching}
+                onPageChange={setSalesPage}
+                onPageSizeChange={(nextSize) => {
+                  setSalesPageSize(nextSize);
+                  setSalesPage(0);
+                }}
+                pagination={salesDetailQuery.data}
                 rowKey={(row) => String(row.saleId)}
-                rows={salesQuery.data.items}
+                rows={salesDetailQuery.data?.items ?? []}
+                sort={{
+                  value: salesSort,
+                  onChange: (nextSort) => {
+                    setSalesSort(nextSort);
+                    setSalesPage(0);
+                  },
+                }}
               />
             </>
           ) : null}
@@ -261,18 +371,18 @@ export function ReportsHomePage() {
       <section className="grid gap-6 xl:grid-cols-2">
         {canViewCash ? (
           <ReportPanel
-            badge={cashQuery.isLoading ? 'Cargando' : cashQuery.isError ? 'Error' : 'Listo'}
+            badge={cashSummaryQuery.isLoading ? 'Cargando' : cashSummaryQuery.isError ? 'Error' : 'Listo'}
             description="Contrato real `GET /api/v1/reportes/caja`."
             title="Reporte de caja"
-            tone={cashQuery.isError ? 'warning' : cashQuery.isLoading ? 'neutral' : 'success'}
+            tone={cashSummaryQuery.isError ? 'warning' : cashSummaryQuery.isLoading ? 'neutral' : 'success'}
           >
-            {cashQuery.isLoading ? <ResourceState body="Consultando reporte de caja..." title="Cargando caja" /> : null}
-            {cashQuery.isError ? <ResourceState body={getApiErrorMessage(cashQuery.error, 'No se pudo consultar el reporte de caja.')} title="Error en reporte de caja" tone="danger" /> : null}
-            {cashQuery.data ? (
+            {cashSummaryQuery.isLoading ? <ResourceState body="Consultando reporte de caja..." title="Cargando caja" /> : null}
+            {cashSummaryQuery.isError ? <ResourceState body={getApiErrorMessage(cashSummaryQuery.error, 'No se pudo consultar el reporte de caja.')} title="Error en reporte de caja" tone="danger" /> : null}
+            {cashSummaryQuery.data ? (
               <>
                 <div className="mb-5 grid gap-4 md:grid-cols-2">
-                  <MetricCard helper="Cajas devueltas por el backend." label="Cajas" value={String(cashQuery.data.totalCashBoxes)} />
-                  <MetricCard helper="Diferencia total consolidada." label="Diferencia" value={formatCurrency(cashQuery.data.totalDifferenceAmount)} />
+                  <MetricCard helper="Cajas devueltas por el backend." label="Cajas" value={String(cashSummaryQuery.data.totalCashBoxes)} />
+                  <MetricCard helper="Diferencia total consolidada." label="Diferencia" value={formatCurrency(cashSummaryQuery.data.totalDifferenceAmount)} />
                 </div>
                 <ResourceTable<CashReportRowDto>
                   columns={[
@@ -286,13 +396,28 @@ export function ReportsHomePage() {
                         </div>
                       ),
                     },
-                    { key: 'status', header: 'Estado', render: (row) => <StatusBadge label={row.status} tone={row.status === 'ABIERTA' ? 'success' : 'warning'} /> },
+                    { key: 'status', header: 'Estado', sortable: true, sortKey: 'status', render: (row) => <StatusBadge label={row.status} tone={row.status === 'ABIERTA' ? 'success' : 'warning'} /> },
                     { key: 'openedBy', header: 'Apertura', render: (row) => row.openedByUsername ?? 'No disponible' },
-                    { key: 'expected', header: 'Esperado', render: (row) => formatCurrency(row.expectedAmount) },
-                    { key: 'difference', header: 'Diferencia', render: (row) => formatCurrency(row.differenceAmount) },
+                    { key: 'expected', header: 'Esperado', sortable: true, sortKey: 'expectedAmount', render: (row) => formatCurrency(row.expectedAmount) },
+                    { key: 'difference', header: 'Diferencia', sortable: true, sortKey: 'differenceAmount', render: (row) => formatCurrency(row.differenceAmount) },
                   ]}
+                  emptyState={<p className="text-sm text-slate-500">No hay detalle de cajas para el periodo seleccionado.</p>}
+                  isLoading={cashDetailQuery.isFetching}
+                  onPageChange={setCashPage}
+                  onPageSizeChange={(nextSize) => {
+                    setCashPageSize(nextSize);
+                    setCashPage(0);
+                  }}
+                  pagination={cashDetailQuery.data}
                   rowKey={(row) => String(row.cashBoxId)}
-                  rows={cashQuery.data.items}
+                  rows={cashDetailQuery.data?.items ?? []}
+                  sort={{
+                    value: cashSort,
+                    onChange: (nextSort) => {
+                      setCashSort(nextSort);
+                      setCashPage(0);
+                    },
+                  }}
                 />
               </>
             ) : null}
@@ -301,29 +426,44 @@ export function ReportsHomePage() {
 
         {canViewPurchases ? (
           <ReportPanel
-            badge={purchasesQuery.isLoading ? 'Cargando' : purchasesQuery.isError ? 'Error' : 'Listo'}
+            badge={purchasesSummaryQuery.isLoading ? 'Cargando' : purchasesSummaryQuery.isError ? 'Error' : 'Listo'}
             description="Contrato real `GET /api/v1/reportes/compras`."
             title="Reporte de compras"
-            tone={purchasesQuery.isError ? 'warning' : purchasesQuery.isLoading ? 'neutral' : 'success'}
+            tone={purchasesSummaryQuery.isError ? 'warning' : purchasesSummaryQuery.isLoading ? 'neutral' : 'success'}
           >
-            {purchasesQuery.isLoading ? <ResourceState body="Consultando reporte de compras..." title="Cargando compras" /> : null}
-            {purchasesQuery.isError ? <ResourceState body={getApiErrorMessage(purchasesQuery.error, 'No se pudo consultar el reporte de compras.')} title="Error en reporte de compras" tone="danger" /> : null}
-            {purchasesQuery.data ? (
+            {purchasesSummaryQuery.isLoading ? <ResourceState body="Consultando reporte de compras..." title="Cargando compras" /> : null}
+            {purchasesSummaryQuery.isError ? <ResourceState body={getApiErrorMessage(purchasesSummaryQuery.error, 'No se pudo consultar el reporte de compras.')} title="Error en reporte de compras" tone="danger" /> : null}
+            {purchasesSummaryQuery.data ? (
               <>
                 <div className="mb-5 grid gap-4 md:grid-cols-2">
-                  <MetricCard helper="Compras incluidas en el reporte." label="Compras" value={String(purchasesQuery.data.totalPurchases)} />
-                  <MetricCard helper="Monto efectivo consolidado." label="Monto" value={formatCurrency(purchasesQuery.data.totalAmount)} />
+                  <MetricCard helper="Compras incluidas en el reporte." label="Compras" value={String(purchasesSummaryQuery.data.totalPurchases)} />
+                  <MetricCard helper="Monto efectivo consolidado." label="Monto" value={formatCurrency(purchasesSummaryQuery.data.totalAmount)} />
                 </div>
                 <ResourceTable<PurchaseReportRowDto>
                   columns={[
-                    { key: 'provider', header: 'Proveedor', render: (row) => row.providerName ?? 'No disponible' },
-                    { key: 'status', header: 'Estado', render: (row) => <StatusBadge label={row.status} tone={row.status === 'REGISTRADA' ? 'success' : 'warning'} /> },
-                    { key: 'date', header: 'Fecha', render: (row) => formatDate(row.purchaseDate) },
+                    { key: 'provider', header: 'Proveedor', sortable: true, sortKey: 'providerName', render: (row) => row.providerName ?? 'No disponible' },
+                    { key: 'status', header: 'Estado', sortable: true, sortKey: 'status', render: (row) => <StatusBadge label={row.status} tone={row.status === 'REGISTRADA' ? 'success' : 'warning'} /> },
+                    { key: 'date', header: 'Fecha', sortable: true, sortKey: 'purchaseDate', render: (row) => formatDate(row.purchaseDate) },
                     { key: 'context', header: 'Contexto', render: (row) => row.operationalContextName ?? 'Sin contexto' },
-                    { key: 'amount', header: 'Monto', render: (row) => formatCurrency(row.effectiveAmount) },
+                    { key: 'amount', header: 'Monto', sortable: true, sortKey: 'effectiveAmount', render: (row) => formatCurrency(row.effectiveAmount) },
                   ]}
+                  emptyState={<p className="text-sm text-slate-500">No hay detalle de compras para el periodo seleccionado.</p>}
+                  isLoading={purchasesDetailQuery.isFetching}
+                  onPageChange={setPurchasesPage}
+                  onPageSizeChange={(nextSize) => {
+                    setPurchasesPageSize(nextSize);
+                    setPurchasesPage(0);
+                  }}
+                  pagination={purchasesDetailQuery.data}
                   rowKey={(row) => String(row.purchaseId)}
-                  rows={purchasesQuery.data.items}
+                  rows={purchasesDetailQuery.data?.items ?? []}
+                  sort={{
+                    value: purchasesSort,
+                    onChange: (nextSort) => {
+                      setPurchasesSort(nextSort);
+                      setPurchasesPage(0);
+                    },
+                  }}
                 />
               </>
             ) : null}
@@ -334,29 +474,44 @@ export function ReportsHomePage() {
       <section className="grid gap-6 xl:grid-cols-2">
         {canViewExpenses ? (
           <ReportPanel
-            badge={expensesQuery.isLoading ? 'Cargando' : expensesQuery.isError ? 'Error' : 'Listo'}
+            badge={expensesSummaryQuery.isLoading ? 'Cargando' : expensesSummaryQuery.isError ? 'Error' : 'Listo'}
             description="Contrato real `GET /api/v1/reportes/egresos`."
             title="Reporte de egresos"
-            tone={expensesQuery.isError ? 'warning' : expensesQuery.isLoading ? 'neutral' : 'success'}
+            tone={expensesSummaryQuery.isError ? 'warning' : expensesSummaryQuery.isLoading ? 'neutral' : 'success'}
           >
-            {expensesQuery.isLoading ? <ResourceState body="Consultando reporte de egresos..." title="Cargando egresos" /> : null}
-            {expensesQuery.isError ? <ResourceState body={getApiErrorMessage(expensesQuery.error, 'No se pudo consultar el reporte de egresos.')} title="Error en reporte de egresos" tone="danger" /> : null}
-            {expensesQuery.data ? (
+            {expensesSummaryQuery.isLoading ? <ResourceState body="Consultando reporte de egresos..." title="Cargando egresos" /> : null}
+            {expensesSummaryQuery.isError ? <ResourceState body={getApiErrorMessage(expensesSummaryQuery.error, 'No se pudo consultar el reporte de egresos.')} title="Error en reporte de egresos" tone="danger" /> : null}
+            {expensesSummaryQuery.data ? (
               <>
                 <div className="mb-5 grid gap-4 md:grid-cols-2">
-                  <MetricCard helper="Egresos devueltos por el backend." label="Egresos" value={String(expensesQuery.data.totalExpenses)} />
-                  <MetricCard helper="Monto consolidado." label="Monto" value={formatCurrency(expensesQuery.data.totalAmount)} />
+                  <MetricCard helper="Egresos devueltos por el backend." label="Egresos" value={String(expensesSummaryQuery.data.totalExpenses)} />
+                  <MetricCard helper="Monto consolidado." label="Monto" value={formatCurrency(expensesSummaryQuery.data.totalAmount)} />
                 </div>
                 <ResourceTable<ExpenseReportRowDto>
                   columns={[
-                    { key: 'type', header: 'Tipo', render: (row) => <StatusBadge label={row.expenseType} tone="neutral" /> },
-                    { key: 'category', header: 'Categoria', render: (row) => row.category },
+                    { key: 'type', header: 'Tipo', sortable: true, sortKey: 'expenseType', render: (row) => <StatusBadge label={row.expenseType} tone="neutral" /> },
+                    { key: 'category', header: 'Categoria', sortable: true, sortKey: 'category', render: (row) => row.category },
                     { key: 'description', header: 'Descripcion', render: (row) => row.description },
-                    { key: 'date', header: 'Fecha', render: (row) => formatDate(row.expenseDate) },
-                    { key: 'amount', header: 'Monto', render: (row) => formatCurrency(row.amount) },
+                    { key: 'date', header: 'Fecha', sortable: true, sortKey: 'expenseDate', render: (row) => formatDate(row.expenseDate) },
+                    { key: 'amount', header: 'Monto', sortable: true, sortKey: 'amount', render: (row) => formatCurrency(row.amount) },
                   ]}
+                  emptyState={<p className="text-sm text-slate-500">No hay detalle de egresos para el periodo seleccionado.</p>}
+                  isLoading={expensesDetailQuery.isFetching}
+                  onPageChange={setExpensesPage}
+                  onPageSizeChange={(nextSize) => {
+                    setExpensesPageSize(nextSize);
+                    setExpensesPage(0);
+                  }}
+                  pagination={expensesDetailQuery.data}
                   rowKey={(row) => String(row.expenseId)}
-                  rows={expensesQuery.data.items}
+                  rows={expensesDetailQuery.data?.items ?? []}
+                  sort={{
+                    value: expensesSort,
+                    onChange: (nextSort) => {
+                      setExpensesSort(nextSort);
+                      setExpensesPage(0);
+                    },
+                  }}
                 />
               </>
             ) : null}
@@ -365,24 +520,26 @@ export function ReportsHomePage() {
 
         {canViewStock ? (
           <ReportPanel
-            badge={stockQuery.isLoading ? 'Cargando' : stockQuery.isError ? 'Error' : 'Listo'}
+            badge={stockSummaryQuery.isLoading ? 'Cargando' : stockSummaryQuery.isError ? 'Error' : 'Listo'}
             description="Contrato real `GET /api/v1/reportes/stock`."
             title="Reporte de stock"
-            tone={stockQuery.isError ? 'warning' : stockQuery.isLoading ? 'neutral' : 'success'}
+            tone={stockSummaryQuery.isError ? 'warning' : stockSummaryQuery.isLoading ? 'neutral' : 'success'}
           >
-            {stockQuery.isLoading ? <ResourceState body="Consultando reporte de stock..." title="Cargando stock" /> : null}
-            {stockQuery.isError ? <ResourceState body={getApiErrorMessage(stockQuery.error, 'No se pudo consultar el reporte de stock.')} title="Error en reporte de stock" tone="danger" /> : null}
-            {stockQuery.data ? (
+            {stockSummaryQuery.isLoading ? <ResourceState body="Consultando reporte de stock..." title="Cargando stock" /> : null}
+            {stockSummaryQuery.isError ? <ResourceState body={getApiErrorMessage(stockSummaryQuery.error, 'No se pudo consultar el reporte de stock.')} title="Error en reporte de stock" tone="danger" /> : null}
+            {stockSummaryQuery.data ? (
               <>
                 <div className="mb-5 grid gap-4 md:grid-cols-2">
-                  <MetricCard helper="Productos visibles en el reporte." label="Productos" value={String(stockQuery.data.totalProducts)} />
-                  <MetricCard helper="Unidades globales reportadas." label="Unidades" value={String(stockQuery.data.totalUnits)} />
+                  <MetricCard helper="Productos visibles en el reporte." label="Productos" value={String(stockSummaryQuery.data.totalProducts)} />
+                  <MetricCard helper="Unidades globales reportadas." label="Unidades" value={String(stockSummaryQuery.data.totalUnits)} />
                 </div>
                 <ResourceTable<StockReportRowDto>
                   columns={[
                     {
                       key: 'product',
                       header: 'Producto',
+                      sortable: true,
+                      sortKey: 'productName',
                       render: (row) => (
                         <div>
                           <p className="font-medium text-slate-900">{row.productName}</p>
@@ -390,13 +547,28 @@ export function ReportsHomePage() {
                         </div>
                       ),
                     },
-                    { key: 'unit', header: 'Unidad', render: (row) => row.unitOfMeasure },
-                    { key: 'currentStock', header: 'Stock actual', render: (row) => String(row.currentStock) },
-                    { key: 'minimumStock', header: 'Minimo', render: (row) => String(row.minimumStock) },
-                    { key: 'status', header: 'Estado', render: (row) => <StatusBadge label={row.active ? 'Activo' : 'Inactivo'} tone={row.active ? 'success' : 'warning'} /> },
+                    { key: 'unit', header: 'Unidad', sortable: true, sortKey: 'unitOfMeasure', render: (row) => row.unitOfMeasure },
+                    { key: 'currentStock', header: 'Stock actual', sortable: true, sortKey: 'currentStock', render: (row) => String(row.currentStock) },
+                    { key: 'minimumStock', header: 'Minimo', sortable: true, sortKey: 'minimumStock', render: (row) => String(row.minimumStock) },
+                    { key: 'status', header: 'Estado', sortable: true, sortKey: 'active', render: (row) => <StatusBadge label={row.active ? 'Activo' : 'Inactivo'} tone={row.active ? 'success' : 'warning'} /> },
                   ]}
+                  emptyState={<p className="text-sm text-slate-500">No hay detalle de stock para el criterio actual.</p>}
+                  isLoading={stockDetailQuery.isFetching}
+                  onPageChange={setStockPage}
+                  onPageSizeChange={(nextSize) => {
+                    setStockPageSize(nextSize);
+                    setStockPage(0);
+                  }}
+                  pagination={stockDetailQuery.data}
                   rowKey={(row) => String(row.productId)}
-                  rows={stockQuery.data.items}
+                  rows={stockDetailQuery.data?.items ?? []}
+                  sort={{
+                    value: stockSort,
+                    onChange: (nextSort) => {
+                      setStockSort(nextSort);
+                      setStockPage(0);
+                    },
+                  }}
                 />
               </>
             ) : null}
@@ -439,14 +611,29 @@ export function ReportsHomePage() {
             {historyQuery.data ? (
               <ResourceTable<ReportHistoryDto>
                 columns={[
-                  { key: 'reportType', header: 'Reporte', render: (row) => row.reportType },
-                  { key: 'format', header: 'Formato', render: (row) => row.format },
-                  { key: 'generatedBy', header: 'Generado por', render: (row) => row.generatedBy },
-                  { key: 'generatedAt', header: 'Fecha', render: (row) => formatDateTime(row.generatedAt) },
+                  { key: 'reportType', header: 'Reporte', sortable: true, sortKey: 'reportType', render: (row) => row.reportType },
+                  { key: 'format', header: 'Formato', sortable: true, sortKey: 'format', render: (row) => row.format },
+                  { key: 'generatedBy', header: 'Generado por', sortable: true, sortKey: 'generatedBy', render: (row) => row.generatedBy },
+                  { key: 'generatedAt', header: 'Fecha', sortable: true, sortKey: 'generatedAt', render: (row) => formatDateTime(row.generatedAt) },
                   { key: 'filters', header: 'Filtros', render: (row) => <span className="text-xs text-slate-600">{row.filters ?? 'Sin filtros'}</span> },
                 ]}
+                emptyState={<p className="text-sm text-slate-500">No hay historial de reportes con los filtros actuales.</p>}
+                isLoading={historyQuery.isFetching}
+                onPageChange={setHistoryPage}
+                onPageSizeChange={(nextSize) => {
+                  setHistoryPageSize(nextSize);
+                  setHistoryPage(0);
+                }}
+                pagination={historyQuery.data}
                 rowKey={(row) => String(row.id)}
-                rows={historyQuery.data}
+                rows={historyQuery.data.items}
+                sort={{
+                  value: historySort,
+                  onChange: (nextSort) => {
+                    setHistorySort(nextSort);
+                    setHistoryPage(0);
+                  },
+                }}
               />
             ) : null}
           </ReportPanel>
@@ -468,6 +655,8 @@ export function ReportsHomePage() {
                 {
                   key: 'module',
                   header: 'Módulo',
+                  sortable: true,
+                  sortKey: 'module',
                   render: (row) => (
                     <div>
                       <p className="font-medium text-slate-900">{row.module}</p>
@@ -486,11 +675,26 @@ export function ReportsHomePage() {
                   ),
                 },
                 { key: 'username', header: 'Usuario', render: (row) => row.username },
-                { key: 'occurredAt', header: 'Fecha', render: (row) => formatDateTime(row.occurredAt) },
+                { key: 'occurredAt', header: 'Fecha', sortable: true, sortKey: 'occurredAt', render: (row) => formatDateTime(row.occurredAt) },
                 { key: 'detail', header: 'Detalle', render: (row) => <span className="text-xs text-slate-600">{row.detail ?? 'Sin detalle'}</span> },
               ]}
+              emptyState={<p className="text-sm text-slate-500">No hay operaciones de auditoría con los filtros actuales.</p>}
+              isLoading={auditQuery.isFetching}
+              onPageChange={setAuditPage}
+              onPageSizeChange={(nextSize) => {
+                setAuditPageSize(nextSize);
+                setAuditPage(0);
+              }}
+              pagination={auditQuery.data}
               rowKey={(row) => String(row.id)}
-              rows={auditQuery.data}
+              rows={auditQuery.data.items}
+              sort={{
+                value: auditSort,
+                onChange: (nextSort) => {
+                  setAuditSort(nextSort);
+                  setAuditPage(0);
+                },
+              }}
             />
           ) : null}
         </ReportPanel>

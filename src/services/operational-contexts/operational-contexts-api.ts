@@ -1,13 +1,18 @@
 import { httpClient } from '../api/httpClient';
+import { buildQueryString } from '../api/pagination';
 import type {
   ApiResponse,
   CreateOperationalContextRequest,
   OperationalContextDto,
+  PaginatedResponse,
+  PaginationParams,
   UpdateOperationalContextRequest,
 } from '../api/types';
 
-export async function fetchOperationalContextsAdmin() {
-  const response = await httpClient.get<ApiResponse<OperationalContextDto[]>>('/negocios-eventos');
+export async function fetchOperationalContextsAdmin(params: PaginationParams = {}) {
+  const response = await httpClient.get<ApiResponse<PaginatedResponse<OperationalContextDto>>>(
+    `/negocios-eventos${buildQueryString(params)}`,
+  );
   return response.data;
 }
 

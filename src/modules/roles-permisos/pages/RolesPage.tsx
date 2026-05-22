@@ -8,8 +8,9 @@ import { ResourcePageShell } from '../../../components/ui/ResourcePageShell';
 import { ResourceState } from '../../../components/ui/ResourceState';
 import { ResourceTable } from '../../../components/ui/ResourceTable';
 import { getApiErrorMessage } from '../../../services/api/errors';
+import { DEFAULT_PAGE_SIZE } from '../../../services/api/pagination';
 import type { CreateRoleRequest, RoleDto, UpdateRolePermissionsRequest } from '../../../services/api/types';
-import { createRole, fetchRoles, updateRolePermissions } from '../../../services/security/security-api';
+import { createRole, fetchRolesPage, updateRolePermissions } from '../../../services/security/security-api';
 
 const roleSchema = z.object({
   name: z.string().min(1, 'Ingresa el nombre del rol.'),
@@ -27,7 +28,15 @@ const inputClass = 'w-full rounded-2xl border border-slate-200 bg-white px-4 py-
 export function RolesPage() {
   const queryClient = useQueryClient();
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
-  const rolesQuery = useQuery({ queryKey: ['admin', 'roles'], queryFn: fetchRoles, retry: false });
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [sort, setSort] = useState('name,asc');
+  const rolesQuery = useQuery({
+    queryKey: ['admin', 'roles', page, pageSize, sort],
+    queryFn: () => fetchRolesPage({ page, size: pageSize, sort }),
+    retry: false,
+    placeholderData: (previousData) => previousData,
+  });
 
   const createForm = useForm<RoleFormValues>({
     resolver: zodResolver(roleSchema),
@@ -52,7 +61,7 @@ export function RolesPage() {
     },
   });
 
-  const roles = rolesQuery.data ?? [];
+  const roles = rolesQuery.data?.items ?? [];
   const selectedRole = roles.find((role) => String(role.id) === selectedRoleId) ?? null;
 
   useEffect(() => {
@@ -69,7 +78,7 @@ export function RolesPage() {
       documents={['04 - HU-SEG-002', '18 - API-ROL-001/API-ROL-002/API-ROL-003', '17 - Guards y reglas de acceso']}
       summary={
         <div className="grid gap-4 md:grid-cols-3">
-          <MetricCard helper="Roles publicados por el backend." label="Roles" value={String(roles.length)} />
+          <MetricCard helper="Roles publicados por el backend." label="Roles" value={String(rolesQuery.data?.totalElements ?? roles.length)} />
           <MetricCard helper="Permisos visibles en el sistema." label="Permisos totales" value={String(roles.reduce((acc, role) => acc + role.permissions.length, 0))} />
           <MetricCard helper="Roles con descripcion funcional." label="Con descripcion" value={String(roles.filter((role) => role.description).length)} />
         </div>
@@ -109,6 +118,8 @@ export function RolesPage() {
               {
                 key: 'name',
                 header: 'Rol',
+                sortable: true,
+                sortKey: 'name',
                 render: (role) => (
                   <button className="text-left" onClick={() => setSelectedRoleId(String(role.id))} type="button">
                     <p className="font-medium text-slate-900">{role.name}</p>
@@ -126,8 +137,23 @@ export function RolesPage() {
                 ),
               },
             ]}
+            emptyState={<p className="text-sm text-slate-500">No hay roles para mostrar con el criterio actual.</p>}
+            isLoading={rolesQuery.isFetching}
+            onPageChange={setPage}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize);
+              setPage(0);
+            }}
+            pagination={rolesQuery.data}
             rowKey={(role) => String(role.id)}
             rows={roles}
+            sort={{
+              value: sort,
+              onChange: (nextSort) => {
+                setSort(nextSort);
+                setPage(0);
+              },
+            }}
           />
           {selectedRole ? (
             <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">

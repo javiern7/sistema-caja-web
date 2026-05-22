@@ -9,6 +9,7 @@ import { ResourceState } from '../../../components/ui/ResourceState';
 import { ResourceTable } from '../../../components/ui/ResourceTable';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { getApiErrorMessage } from '../../../services/api/errors';
+import { DEFAULT_PAGE_SIZE } from '../../../services/api/pagination';
 import type { CreateExpenseRequest, ExpenseDto } from '../../../services/api/types';
 import { createExpense, fetchExpenseDetail, fetchExpenses } from '../../../services/expenses/expenses-api';
 import { useOperationalStore } from '../../../store/operational-store';
@@ -61,11 +62,20 @@ export function ExpensePage() {
   const activeCash = useOperationalStore((state) => state.activeCash);
   const [selectedExpenseId, setSelectedExpenseId] = useState<string | null>(null);
   const [lastCreatedExpense, setLastCreatedExpense] = useState<ExpenseDto | null>(null);
+  const [expensesPage, setExpensesPage] = useState(0);
+  const [expensesPageSize, setExpensesPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [expensesSort, setExpensesSort] = useState('expenseDate,desc');
 
   const expensesQuery = useQuery({
-    queryKey: ['expenses'],
-    queryFn: fetchExpenses,
+    queryKey: ['expenses', expensesPage, expensesPageSize, expensesSort],
+    queryFn: () =>
+      fetchExpenses({
+        page: expensesPage,
+        size: expensesPageSize,
+        sort: expensesSort,
+      }),
     retry: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const expenseDetailQuery = useQuery({
@@ -93,12 +103,12 @@ export function ExpensePage() {
   const amount = Number(watch('amount') || 0);
   const categoryOptions = categoryOptionsByType[expenseType] ?? categoryOptionsByType.ADMINISTRATIVO;
 
-  const expenses = expensesQuery.data ?? [];
+  const expenses = expensesQuery.data?.items ?? [];
   const visibleAmount = useMemo(
     () => expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0),
     [expenses],
   );
-  const selectedExpense = expenseDetailQuery.data ?? expenses.find((expense) => String(expense.id) === selectedExpenseId) ?? null;
+  const selectedExpense = expenseDetailQuery.data ?? null;
 
   const createMutation = useMutation({
     mutationFn: (payload: CreateExpenseRequest) => createExpense(payload),
@@ -106,10 +116,6 @@ export function ExpensePage() {
       setLastCreatedExpense(expense);
       setSelectedExpenseId(String(expense.id));
       reset(initialExpenseValues());
-      queryClient.setQueryData<ExpenseDto[]>(['expenses'], (currentExpenses) => {
-        const nextExpenses = currentExpenses ?? [];
-        return [expense, ...nextExpenses.filter((currentExpense) => Number(currentExpense.id) !== Number(expense.id))];
-      });
       queryClient.setQueryData(['expenses', 'detail', String(expense.id)], expense);
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       queryClient.invalidateQueries({ queryKey: ['cash-box', 'summary'] });
@@ -135,7 +141,7 @@ export function ExpensePage() {
         <div className="grid gap-4 md:grid-cols-4">
           <MetricCard helper="Contexto al que se imputa el egreso." label="Contexto" value={activeContext.name} />
           <MetricCard helper="Caja requerida para registrar egresos en esta pantalla." label="Caja activa" value={activeCash ? String(activeCash.id) : 'Sin caja'} />
-          <MetricCard helper="Total de egresos visibles luego del ultimo refresco." label="Registros" value={String(expenses.length)} />
+          <MetricCard helper="Total de egresos visibles luego del ultimo refresco." label="Registros" value={String(expensesQuery.data?.totalElements ?? expenses.length)} />
           <MetricCard helper="Suma de los montos visibles en el listado inferior." label="Monto acumulado" value={formatCurrency(visibleAmount)} />
         </div>
       }
@@ -347,6 +353,8 @@ export function ExpensePage() {
                 {
                   key: 'type',
                   header: 'Tipo / categoria',
+                  sortable: true,
+                  sortKey: 'expenseType',
                   render: (expense) => (
                     <button className="text-left" onClick={() => setSelectedExpenseId(String(expense.id))} type="button">
                       <p className="font-medium text-slate-900">{expense.expenseType}</p>
@@ -364,10 +372,12 @@ export function ExpensePage() {
                     </div>
                   ),
                 },
-                { key: 'amount', header: 'Monto', render: (expense) => formatCurrency(expense.amount) },
+                { key: 'amount', header: 'Monto', sortable: true, sortKey: 'amount', render: (expense) => formatCurrency(expense.amount) },
                 {
                   key: 'audit',
                   header: 'Fecha / usuario',
+                  sortable: true,
+                  sortKey: 'expenseDate',
                   render: (expense) => (
                     <div>
                       <p>{formatDate(expense.expenseDate)}</p>
@@ -393,19 +403,34 @@ export function ExpensePage() {
                   ),
                 },
               ]}
+              emptyState={<p className="text-sm text-slate-500">No hay egresos registrados con el criterio actual.</p>}
+              isLoading={expensesQuery.isFetching}
+              onPageChange={setExpensesPage}
+              onPageSizeChange={(nextSize) => {
+                setExpensesPageSize(nextSize);
+                setExpensesPage(0);
+              }}
+              pagination={expensesQuery.data}
               rowKey={(expense) => String(expense.id)}
               rows={expenses}
+              sort={{
+                value: expensesSort,
+                onChange: (nextSort) => {
+                  setExpensesSort(nextSort);
+                  setExpensesPage(0);
+                },
+              }}
             />
           </section>
 
-          {selectedExpense ? (
+          {selectedExpenseId ? (
             <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-950">Detalle de egreso #{selectedExpense.id}</h2>
-                  <p className="mt-1 text-sm text-slate-600">{selectedExpense.operationalContextName ?? activeContext.name}</p>
+                  <h2 className="text-lg font-semibold text-slate-950">Detalle de egreso #{selectedExpense?.id ?? selectedExpenseId}</h2>
+                  <p className="mt-1 text-sm text-slate-600">{selectedExpense?.operationalContextName ?? activeContext.name}</p>
                 </div>
-                <StatusBadge label={selectedExpense.expenseType} tone="neutral" />
+                {selectedExpense ? <StatusBadge label={selectedExpense.expenseType} tone="neutral" /> : null}
               </div>
 
               {expenseDetailQuery.isLoading ? <p className="mt-4 text-sm text-slate-600">Cargando detalle...</p> : null}
@@ -415,31 +440,35 @@ export function ExpensePage() {
                 </div>
               ) : null}
 
-              <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <MetricCard helper="Monto reportado por backend." label="Monto" value={formatCurrency(selectedExpense.amount)} />
-                <MetricCard helper="Caja vinculada al movimiento si aplica." label="Caja" value={selectedExpense.cashBoxId ? String(selectedExpense.cashBoxId) : 'Sin caja'} />
-                <MetricCard helper="Fecha efectiva del egreso." label="Fecha" value={formatDate(selectedExpense.expenseDate)} />
-                <MetricCard helper="Registro de sistema." label="Creado" value={formatDateTime(selectedExpense.createdAt)} />
-              </div>
+              {selectedExpense ? (
+                <>
+                  <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <MetricCard helper="Monto reportado por backend." label="Monto" value={formatCurrency(selectedExpense.amount)} />
+                    <MetricCard helper="Caja vinculada al movimiento si aplica." label="Caja" value={selectedExpense.cashBoxId ? String(selectedExpense.cashBoxId) : 'Sin caja'} />
+                    <MetricCard helper="Fecha efectiva del egreso." label="Fecha" value={formatDate(selectedExpense.expenseDate)} />
+                    <MetricCard helper="Registro de sistema." label="Creado" value={formatDateTime(selectedExpense.createdAt)} />
+                  </div>
 
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 p-4">
-                  <p className="text-sm font-semibold text-slate-900">Descripcion</p>
-                  <p className="mt-2 text-sm text-slate-600">{selectedExpense.description}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 p-4">
-                  <p className="text-sm font-semibold text-slate-900">Observacion</p>
-                  <p className="mt-2 text-sm text-slate-600">{selectedExpense.observation ?? 'Sin observacion registrada.'}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 p-4">
-                  <p className="text-sm font-semibold text-slate-900">Responsable</p>
-                  <p className="mt-2 text-sm text-slate-600">{selectedExpense.responsible ?? 'No definido'}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 p-4">
-                  <p className="text-sm font-semibold text-slate-900">Metodo de pago</p>
-                  <p className="mt-2 text-sm text-slate-600">{selectedExpense.paymentMethod ?? 'No definido'}</p>
-                </div>
-              </div>
+                  <div className="mt-6 grid gap-4 md:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200 p-4">
+                      <p className="text-sm font-semibold text-slate-900">Descripcion</p>
+                      <p className="mt-2 text-sm text-slate-600">{selectedExpense.description}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 p-4">
+                      <p className="text-sm font-semibold text-slate-900">Observacion</p>
+                      <p className="mt-2 text-sm text-slate-600">{selectedExpense.observation ?? 'Sin observacion registrada.'}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 p-4">
+                      <p className="text-sm font-semibold text-slate-900">Responsable</p>
+                      <p className="mt-2 text-sm text-slate-600">{selectedExpense.responsible ?? 'No definido'}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 p-4">
+                      <p className="text-sm font-semibold text-slate-900">Metodo de pago</p>
+                      <p className="mt-2 text-sm text-slate-600">{selectedExpense.paymentMethod ?? 'No definido'}</p>
+                    </div>
+                  </div>
+                </>
+              ) : null}
 
               <div className="mt-6 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
                 Acciones de mantenimiento como editar, eliminar o inactivar quedan pendientes hasta que el backend exponga reglas y endpoints para mantener trazabilidad sobre caja.

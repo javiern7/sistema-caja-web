@@ -1,22 +1,43 @@
 import { httpClient } from '../api/httpClient';
+import { buildQueryString, fetchAllPages, SELECTOR_PAGE_SIZE } from '../api/pagination';
 import type {
   ApiResponse,
   CreateRoleRequest,
   CreateUserRequest,
+  PaginatedResponse,
+  PaginationParams,
   RoleDto,
   UpdateRolePermissionsRequest,
   UpdateUserRequest,
   UserDto,
 } from '../api/types';
 
+export async function fetchUsersPage(params: PaginationParams = {}) {
+  const response = await httpClient.get<ApiResponse<PaginatedResponse<UserDto>>>(
+    `/usuarios${buildQueryString(params)}`,
+  );
+  return response.data;
+}
+
 export async function fetchUsers() {
-  const response = await httpClient.get<ApiResponse<UserDto[]>>('/usuarios');
+  return fetchAllPages((params) => fetchUsersPage(params), {
+    size: SELECTOR_PAGE_SIZE,
+    sort: 'username,asc',
+  });
+}
+
+export async function fetchRolesPage(params: PaginationParams = {}) {
+  const response = await httpClient.get<ApiResponse<PaginatedResponse<RoleDto>>>(
+    `/roles${buildQueryString(params)}`,
+  );
   return response.data;
 }
 
 export async function fetchRoles() {
-  const response = await httpClient.get<ApiResponse<RoleDto[]>>('/roles');
-  return response.data;
+  return fetchAllPages((params) => fetchRolesPage(params), {
+    size: SELECTOR_PAGE_SIZE,
+    sort: 'name,asc',
+  });
 }
 
 export async function createUser(payload: CreateUserRequest) {

@@ -9,8 +9,9 @@ import { ResourceState } from '../../../components/ui/ResourceState';
 import { ResourceTable } from '../../../components/ui/ResourceTable';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { getApiErrorMessage } from '../../../services/api/errors';
+import { DEFAULT_PAGE_SIZE } from '../../../services/api/pagination';
 import type { CreateUserRequest, UpdateUserRequest, UserDto } from '../../../services/api/types';
-import { createUser, fetchRoles, fetchUsers, updateUser, updateUserStatus } from '../../../services/security/security-api';
+import { createUser, fetchRoles, fetchUsersPage, updateUser, updateUserStatus } from '../../../services/security/security-api';
 
 const userSchema = z.object({
   username: z.string().min(1, 'Ingresa el usuario.'),
@@ -33,7 +34,15 @@ const inputClass = 'w-full rounded-2xl border border-slate-200 bg-white px-4 py-
 export function UsersPage() {
   const queryClient = useQueryClient();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const usersQuery = useQuery({ queryKey: ['admin', 'usuarios'], queryFn: fetchUsers, retry: false });
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [sort, setSort] = useState('username,asc');
+  const usersQuery = useQuery({
+    queryKey: ['admin', 'usuarios', page, pageSize, sort],
+    queryFn: () => fetchUsersPage({ page, size: pageSize, sort }),
+    retry: false,
+    placeholderData: (previousData) => previousData,
+  });
   const rolesQuery = useQuery({ queryKey: ['admin', 'roles', 'selector'], queryFn: fetchRoles, retry: false });
 
   const createForm = useForm<UserFormValues>({
@@ -65,7 +74,7 @@ export function UsersPage() {
     },
   });
 
-  const users = usersQuery.data ?? [];
+  const users = usersQuery.data?.items ?? [];
   const roles = rolesQuery.data ?? [];
   const selectedUser = users.find((user) => String(user.id) === selectedUserId) ?? null;
 
@@ -86,7 +95,7 @@ export function UsersPage() {
       documents={['04 - HU-SEG-002', '18 - API-USR-001/API-USR-002/API-USR-003', '10 - DFC-015 auditoria minima']}
       summary={
         <div className="grid gap-4 md:grid-cols-3">
-          <MetricCard helper="Usuarios devueltos por el backend." label="Usuarios" value={String(users.length)} />
+          <MetricCard helper="Usuarios devueltos por el backend." label="Usuarios" value={String(usersQuery.data?.totalElements ?? users.length)} />
           <MetricCard helper="Acceso habilitado al sistema." label="Activos" value={String(users.filter((user) => user.active).length)} />
           <MetricCard helper="Roles vinculados a usuarios." label="Roles en uso" value={String(new Set(users.map((user) => user.roleName)).size)} />
         </div>
@@ -121,12 +130,27 @@ export function UsersPage() {
         <>
           <ResourceTable<UserDto>
             columns={[
-              { key: 'username', header: 'Usuario', render: (user) => <button className="text-left font-medium text-slate-900" onClick={() => setSelectedUserId(String(user.id))} type="button">{user.username}</button> },
-              { key: 'role', header: 'Rol', render: (user) => <span>{user.roleName}</span> },
-              { key: 'status', header: 'Estado', render: (user) => <button onClick={() => toggleStatusMutation.mutate({ userId: Number(user.id), active: !user.active })} type="button"><StatusBadge label={user.active ? 'Activo' : 'Inactivo'} tone={user.active ? 'success' : 'warning'} /></button> },
+              { key: 'username', header: 'Usuario', sortable: true, sortKey: 'username', render: (user) => <button className="text-left font-medium text-slate-900" onClick={() => setSelectedUserId(String(user.id))} type="button">{user.username}</button> },
+              { key: 'role', header: 'Rol', sortable: true, sortKey: 'roleName', render: (user) => <span>{user.roleName}</span> },
+              { key: 'status', header: 'Estado', sortable: true, sortKey: 'active', render: (user) => <button onClick={() => toggleStatusMutation.mutate({ userId: Number(user.id), active: !user.active })} type="button"><StatusBadge label={user.active ? 'Activo' : 'Inactivo'} tone={user.active ? 'success' : 'warning'} /></button> },
             ]}
+            emptyState={<p className="text-sm text-slate-500">No hay usuarios para mostrar con el criterio actual.</p>}
+            isLoading={usersQuery.isFetching}
+            onPageChange={setPage}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize);
+              setPage(0);
+            }}
+            pagination={usersQuery.data}
             rowKey={(user) => String(user.id)}
             rows={users}
+            sort={{
+              value: sort,
+              onChange: (nextSort) => {
+                setSort(nextSort);
+                setPage(0);
+              },
+            }}
           />
           {selectedUser ? (
             <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">

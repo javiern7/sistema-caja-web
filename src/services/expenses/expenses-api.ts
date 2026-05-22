@@ -1,8 +1,17 @@
 import { httpClient } from '../api/httpClient';
-import type { ApiResponse, CreateExpenseRequest, ExpenseDto } from '../api/types';
+import { buildQueryString } from '../api/pagination';
+import type {
+  ApiResponse,
+  CreateExpenseRequest,
+  ExpenseDto,
+  PaginatedResponse,
+  PaginationParams,
+} from '../api/types';
 
-export async function fetchExpenses() {
-  const response = await httpClient.get<ApiResponse<ExpenseDto[]>>('/egresos');
+export async function fetchExpenses(params: PaginationParams = {}) {
+  const response = await httpClient.get<ApiResponse<PaginatedResponse<ExpenseDto>>>(
+    `/egresos${buildQueryString(params)}`,
+  );
   return response.data;
 }
 

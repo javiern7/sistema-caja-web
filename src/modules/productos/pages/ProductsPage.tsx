@@ -9,8 +9,9 @@ import { ResourceState } from '../../../components/ui/ResourceState';
 import { ResourceTable } from '../../../components/ui/ResourceTable';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { getApiErrorMessage } from '../../../services/api/errors';
+import { DEFAULT_PAGE_SIZE } from '../../../services/api/pagination';
 import type { CreateProductRequest, ProductDto } from '../../../services/api/types';
-import { createProduct, fetchProducts, updateProduct, updateProductStatus } from '../../../services/catalogs/catalogs-api';
+import { createProduct, fetchProductsPage, updateProduct, updateProductStatus } from '../../../services/catalogs/catalogs-api';
 
 const productSchema = z.object({
   code: z.string().min(1, 'Ingresa el codigo.'),
@@ -32,10 +33,14 @@ const inputClass =
 export function ProductsPage() {
   const queryClient = useQueryClient();
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [sort, setSort] = useState('name,asc');
   const productsQuery = useQuery({
-    queryKey: ['admin', 'productos'],
-    queryFn: fetchProducts,
+    queryKey: ['admin', 'productos', page, pageSize, sort],
+    queryFn: () => fetchProductsPage({ page, size: pageSize, sort }),
     retry: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const createForm = useForm<ProductFormValues>({
@@ -90,7 +95,7 @@ export function ProductsPage() {
     },
   });
 
-  const products = productsQuery.data ?? [];
+  const products = productsQuery.data?.items ?? [];
   const selectedProduct = products.find((product) => String(product.id) === selectedProductId) ?? null;
   const activeProducts = products.filter((product) => product.active).length;
   const stockControlledProducts = products.filter((product) => product.stockControlled).length;
@@ -124,7 +129,7 @@ export function ProductsPage() {
       documents={['04 - HU-PRO-001', '18 - API-PRO-001/API-PRO-002/API-PRO-003', '21 - Convenciones frontend por modulos']}
       summary={
         <div className="grid gap-4 md:grid-cols-3">
-          <MetricCard helper="Respuesta real del backend local." label="Productos cargados" value={String(products.length)} />
+          <MetricCard helper="Respuesta real del backend local." label="Productos cargados" value={String(productsQuery.data?.totalElements ?? products.length)} />
           <MetricCard helper="Base para ventas y consultas." label="Productos activos" value={String(activeProducts)} />
           <MetricCard helper="Relacionados con reglas de inventario." label="Controlan stock" value={String(stockControlledProducts)} />
         </div>
@@ -213,11 +218,15 @@ export function ProductsPage() {
               {
                 key: 'code',
                 header: 'Codigo',
+                sortable: true,
+                sortKey: 'code',
                 render: (product) => <span className="font-medium text-slate-900">{product.code}</span>,
               },
               {
                 key: 'name',
                 header: 'Producto',
+                sortable: true,
+                sortKey: 'name',
                 render: (product) => (
                   <div>
                     <p className="font-medium text-slate-900">{product.name}</p>
@@ -228,6 +237,8 @@ export function ProductsPage() {
               {
                 key: 'pricing',
                 header: 'Precio / costo',
+                sortable: true,
+                sortKey: 'salePrice',
                 render: (product) => (
                   <div>
                     <p>Venta: S/ {Number(product.salePrice).toFixed(2)}</p>
@@ -238,6 +249,8 @@ export function ProductsPage() {
               {
                 key: 'stock',
                 header: 'Stock',
+                sortable: true,
+                sortKey: 'minimumStock',
                 render: (product) => (
                   <div>
                     <p>Minimo: {Number(product.minimumStock).toFixed(2)}</p>
@@ -248,6 +261,8 @@ export function ProductsPage() {
               {
                 key: 'status',
                 header: 'Estado',
+                sortable: true,
+                sortKey: 'active',
                 render: (product) => (
                   <StatusBadge label={product.active ? 'Activo' : 'Inactivo'} tone={product.active ? 'success' : 'warning'} />
                 ),
@@ -285,11 +300,26 @@ export function ProductsPage() {
                 },
               },
             ]}
+            emptyState={<p className="text-sm text-slate-500">No hay productos para mostrar con el criterio actual.</p>}
+            isLoading={productsQuery.isFetching}
+            onPageChange={setPage}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize);
+              setPage(0);
+            }}
+            pagination={productsQuery.data}
             rowClassName={(product) =>
               String(product.id) === selectedProductId ? 'align-top bg-brand-50/50 ring-1 ring-inset ring-brand-100' : 'align-top'
             }
             rowKey={(product) => String(product.id)}
             rows={products}
+            sort={{
+              value: sort,
+              onChange: (nextSort) => {
+                setSort(nextSort);
+                setPage(0);
+              },
+            }}
           />
 
           {selectedProduct ? (

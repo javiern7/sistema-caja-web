@@ -1,5 +1,13 @@
 import { httpClient } from '../api/httpClient';
-import type { ApiResponse, CashBoxDto, CloseCashBoxRequest, OpenCashBoxRequest } from '../api/types';
+import { buildQueryString } from '../api/pagination';
+import type {
+  ApiResponse,
+  CashBoxDto,
+  CloseCashBoxRequest,
+  OpenCashBoxRequest,
+  PaginatedResponse,
+  PaginationParams,
+} from '../api/types';
 
 export async function fetchActiveCashBox() {
   const response = await httpClient.get<ApiResponse<CashBoxDto>>('/cajas/activa');
@@ -15,19 +23,17 @@ export async function fetchCashBoxes(filters?: {
   status?: string;
   operationalContextId?: number;
   openedByUserId?: number;
-}) {
-  const query = new URLSearchParams();
-  if (filters?.status) {
-    query.set('status', filters.status);
-  }
-  if (typeof filters?.operationalContextId === 'number') {
-    query.set('operationalContextId', String(filters.operationalContextId));
-  }
-  if (typeof filters?.openedByUserId === 'number') {
-    query.set('openedByUserId', String(filters.openedByUserId));
-  }
-  const suffix = query.toString() ? `?${query.toString()}` : '';
-  const response = await httpClient.get<ApiResponse<CashBoxDto[]>>(`/cajas${suffix}`);
+} & PaginationParams) {
+  const response = await httpClient.get<ApiResponse<PaginatedResponse<CashBoxDto>>>(
+    `/cajas${buildQueryString({
+      status: filters?.status,
+      operationalContextId: filters?.operationalContextId,
+      openedByUserId: filters?.openedByUserId,
+      page: filters?.page,
+      size: filters?.size,
+      sort: filters?.sort,
+    })}`,
+  );
   return response.data;
 }
 

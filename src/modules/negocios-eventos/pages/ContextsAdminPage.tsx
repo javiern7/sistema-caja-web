@@ -9,6 +9,7 @@ import { ResourceState } from '../../../components/ui/ResourceState';
 import { ResourceTable } from '../../../components/ui/ResourceTable';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { getApiErrorMessage } from '../../../services/api/errors';
+import { DEFAULT_PAGE_SIZE } from '../../../services/api/pagination';
 import type { CreateOperationalContextRequest, OperationalContextDto } from '../../../services/api/types';
 import { createOperationalContext, fetchOperationalContextsAdmin, updateOperationalContext } from '../../../services/operational-contexts/operational-contexts-api';
 
@@ -28,10 +29,14 @@ const inputClass = 'w-full rounded-2xl border border-slate-200 bg-white px-4 py-
 export function ContextsAdminPage() {
   const queryClient = useQueryClient();
   const [selectedContextId, setSelectedContextId] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [sort, setSort] = useState('name,asc');
   const contextsQuery = useQuery({
-    queryKey: ['admin', 'negocios-eventos'],
-    queryFn: fetchOperationalContextsAdmin,
+    queryKey: ['admin', 'negocios-eventos', page, pageSize, sort],
+    queryFn: () => fetchOperationalContextsAdmin({ page, size: pageSize, sort }),
     retry: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const createForm = useForm<ContextFormValues>({
@@ -73,7 +78,7 @@ export function ContextsAdminPage() {
     },
   });
 
-  const contexts = contextsQuery.data ?? [];
+  const contexts = contextsQuery.data?.items ?? [];
   const selectedContext = contexts.find((context) => String(context.id) === selectedContextId) ?? null;
 
   useEffect(() => {
@@ -105,7 +110,7 @@ export function ContextsAdminPage() {
       documents={['04 - HU-NEG-001', '18 - API-NEG-001/API-NEG-002/API-NEG-003', '13 - Contexto operativo frontend']}
       summary={
         <div className="grid gap-4 md:grid-cols-3">
-          <MetricCard helper="Negocios o eventos devueltos por el backend." label="Contextos" value={String(contexts.length)} />
+          <MetricCard helper="Negocios o eventos devueltos por el backend." label="Contextos" value={String(contextsQuery.data?.totalElements ?? contexts.length)} />
           <MetricCard helper="Contextos de tipo evento." label="Eventos" value={String(contexts.filter((context) => (context.type ?? context.tipo) === 'EVENTO').length)} />
           <MetricCard helper="Contextos de tipo negocio." label="Negocios" value={String(contexts.filter((context) => (context.type ?? context.tipo) === 'NEGOCIO').length)} />
         </div>
@@ -143,6 +148,8 @@ export function ContextsAdminPage() {
               {
                 key: 'name',
                 header: 'Nombre',
+                sortable: true,
+                sortKey: 'name',
                 render: (context) => (
                   <button className="text-left" onClick={() => setSelectedContextId(String(context.id))} type="button">
                     <p className="font-medium text-slate-900">{context.name ?? context.nombre}</p>
@@ -150,7 +157,7 @@ export function ContextsAdminPage() {
                   </button>
                 ),
               },
-              { key: 'type', header: 'Tipo', render: (context) => <span>{context.type ?? context.tipo ?? 'Sin tipo'}</span> },
+              { key: 'type', header: 'Tipo', sortable: true, sortKey: 'type', render: (context) => <span>{context.type ?? context.tipo ?? 'Sin tipo'}</span> },
               {
                 key: 'dates',
                 header: 'Fechas',
@@ -161,10 +168,25 @@ export function ContextsAdminPage() {
                   </div>
                 ),
               },
-              { key: 'status', header: 'Estado', render: (context) => <StatusBadge label={String(context.status ?? context.estado ?? 'SIN_ESTADO')} tone="neutral" /> },
+              { key: 'status', header: 'Estado', sortable: true, sortKey: 'status', render: (context) => <StatusBadge label={String(context.status ?? context.estado ?? 'SIN_ESTADO')} tone="neutral" /> },
             ]}
+            emptyState={<p className="text-sm text-slate-500">No hay contextos para mostrar con el criterio actual.</p>}
+            isLoading={contextsQuery.isFetching}
+            onPageChange={setPage}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize);
+              setPage(0);
+            }}
+            pagination={contextsQuery.data}
             rowKey={(context) => String(context.id)}
             rows={contexts}
+            sort={{
+              value: sort,
+              onChange: (nextSort) => {
+                setSort(nextSort);
+                setPage(0);
+              },
+            }}
           />
           {selectedContext ? (
             <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">

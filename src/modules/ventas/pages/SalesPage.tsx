@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { MetricCard } from '../../../components/ui/MetricCard';
 import { ResourcePageShell } from '../../../components/ui/ResourcePageShell';
@@ -75,6 +76,7 @@ function formatSummaryAmount(hasValues: boolean, amount: number) {
 }
 
 export function SalesPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const hasPermission = useAuthStore((state) => state.hasPermission);
   const activeContext = useOperationalStore((state) => state.activeContext);
@@ -273,7 +275,7 @@ export function SalesPage() {
 
   const canSubmitSale =
     Boolean(activeContext) &&
-    Boolean(activeCash) &&
+    activeCash?.status === 'ABIERTA' &&
     watchedItems.length > 0 &&
     watchedPayments.length > 0 &&
     !productsQuery.isLoading &&
@@ -285,11 +287,58 @@ export function SalesPage() {
     paymentTotal > 0 &&
     paymentDifference === 0;
 
-  if (!activeContext || !activeCash) {
+  if (!activeContext) {
     return (
       <ResourceState
+        action={
+          <button
+            className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+            onClick={() => navigate('/contexto')}
+            type="button"
+          >
+            Ir a seleccionar contexto
+          </button>
+        }
+        body="Selecciona un contexto operativo antes de registrar ventas."
+        title="Contexto pendiente"
+        tone="warning"
+      />
+    );
+  }
+
+  if (!activeCash) {
+    return (
+      <ResourceState
+        action={
+          <button
+            className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+            onClick={() => navigate('/caja/apertura')}
+            type="button"
+          >
+            Ir a apertura de caja
+          </button>
+        }
         body="Necesitas contexto operativo y caja abierta para registrar ventas reales."
         title="Venta no disponible"
+        tone="warning"
+      />
+    );
+  }
+
+  if (activeCash.status !== 'ABIERTA') {
+    return (
+      <ResourceState
+        action={
+          <button
+            className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+            onClick={() => navigate('/caja/apertura')}
+            type="button"
+          >
+            Ir a apertura de caja
+          </button>
+        }
+        body="La caja visible en el estado operativo ya no esta abierta. Debes abrir una nueva caja antes de registrar ventas."
+        title="Caja abierta pendiente"
         tone="warning"
       />
     );

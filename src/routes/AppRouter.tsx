@@ -68,6 +68,9 @@ export function AppRouter() {
           <Route element={<PermissionGuard permission="compra.registrar" />}>
             <Route path="/compras/nueva" element={<PurchasePage />} />
           </Route>
+          <Route element={<PermissionGuard permission="venta.registrar" />}>
+            <Route path="/ventas/nueva" element={<SalesPage />} />
+          </Route>
 
           <Route element={<OperationalContextGuard />}>
 
@@ -80,11 +83,6 @@ export function AppRouter() {
               </Route>
             </Route>
 
-            <Route element={<OpenCashGuard />}>
-              <Route element={<PermissionGuard permission="venta.registrar" />}>
-                <Route path="/ventas/nueva" element={<SalesPage />} />
-              </Route>
-            </Route>
             <Route element={<PermissionGuard permission="stock.consultar" />}>
               <Route path="/stock" element={<StockPage />} />
             </Route>

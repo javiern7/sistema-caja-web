@@ -104,6 +104,7 @@ export function ExpensePage() {
   const expenseType = watch('expenseType');
   const amount = Number(watch('amount') || 0);
   const categoryOptions = categoryOptionsByType[expenseType] ?? categoryOptionsByType.ADMINISTRATIVO;
+  const hasOpenCash = activeCash?.status === 'ABIERTA';
 
   const expenses = expensesQuery.data?.items ?? [];
   const visibleAmount = useMemo(
@@ -126,7 +127,7 @@ export function ExpensePage() {
 
   const canSubmitExpense =
     Boolean(activeContext) &&
-    Boolean(activeCash) &&
+    hasOpenCash &&
     !createMutation.isPending &&
     amount > 0;
 
@@ -164,6 +165,23 @@ export function ExpensePage() {
       }
       title="Registro de egresos"
     >
+      {!hasOpenCash ? (
+        <ResourceState
+          action={
+            <button
+              className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              onClick={() => navigate('/caja/apertura')}
+              type="button"
+            >
+              Ir a apertura de caja
+            </button>
+          }
+          body="Necesitas una caja abierta para registrar egresos en este flujo operativo."
+          title="Caja abierta pendiente"
+          tone="warning"
+        />
+      ) : null}
+
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
         <div className="mb-5">
           <h2 className="text-lg font-semibold text-slate-950">Registrar egreso</h2>
@@ -176,7 +194,7 @@ export function ExpensePage() {
         <form
           className="grid gap-4 md:grid-cols-2"
           onSubmit={handleSubmit((values) => {
-            if (!activeCash) {
+            if (!hasOpenCash || !activeCash) {
               setError('expenseType', {
                 type: 'manual',
                 message: 'No se puede registrar un egreso sin caja activa.',
@@ -308,7 +326,7 @@ export function ExpensePage() {
             </div>
           </div>
 
-          {!activeCash ? (
+          {!hasOpenCash ? (
             <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700 md:col-span-2">
               No se puede registrar un egreso sin caja activa. Abre o selecciona una caja antes de continuar.
             </div>

@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { MetricCard } from '../../../components/ui/MetricCard';
 import { ResourcePageShell } from '../../../components/ui/ResourcePageShell';
@@ -85,6 +86,7 @@ function roundCurrency(value: number) {
 }
 
 export function PurchasePage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const activeContext = useOperationalStore((state) => state.activeContext);
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<string | null>(null);
@@ -256,7 +258,22 @@ export function PurchasePage() {
   }, [productMap, purchaseItems, setValue]);
 
   if (!activeContext) {
-    return <ResourceState body="Selecciona un contexto operativo antes de registrar compras." title="Contexto pendiente" tone="warning" />;
+    return (
+      <ResourceState
+        action={
+          <button
+            className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+            onClick={() => navigate('/contexto')}
+            type="button"
+          >
+            Ir a seleccionar contexto
+          </button>
+        }
+        body="Selecciona un contexto operativo antes de registrar compras."
+        title="Contexto pendiente"
+        tone="warning"
+      />
+    );
   }
 
   const purchases = purchasesQuery.data?.items ?? [];

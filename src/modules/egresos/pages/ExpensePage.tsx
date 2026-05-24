@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { MetricCard } from '../../../components/ui/MetricCard';
 import { ResourcePageShell } from '../../../components/ui/ResourcePageShell';
@@ -57,6 +58,7 @@ function initialExpenseValues(): ExpenseFormValues {
 }
 
 export function ExpensePage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const activeContext = useOperationalStore((state) => state.activeContext);
   const activeCash = useOperationalStore((state) => state.activeCash);
@@ -129,7 +131,22 @@ export function ExpensePage() {
     amount > 0;
 
   if (!activeContext) {
-    return <ResourceState body="Selecciona un contexto operativo antes de registrar egresos." title="Contexto pendiente" tone="warning" />;
+    return (
+      <ResourceState
+        action={
+          <button
+            className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+            onClick={() => navigate('/contexto')}
+            type="button"
+          >
+            Ir a seleccionar contexto
+          </button>
+        }
+        body="Selecciona un contexto operativo antes de registrar egresos."
+        title="Contexto pendiente"
+        tone="warning"
+      />
+    );
   }
 
   return (

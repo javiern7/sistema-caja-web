@@ -58,6 +58,15 @@ export function CashOpeningPage() {
   if (!activeContext) {
     return (
       <ResourceState
+        action={
+          <button
+            className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+            onClick={() => navigate('/contexto')}
+            type="button"
+          >
+            Ir a seleccionar contexto
+          </button>
+        }
         body="Primero necesitas elegir un negocio o evento para que la apertura se registre con el contexto correcto."
         title="Contexto operativo pendiente"
         tone="warning"

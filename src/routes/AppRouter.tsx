@@ -56,13 +56,20 @@ export function AppRouter() {
           <Route path="/sin-permiso" element={<AccessDeniedPage />} />
           <Route path="/contexto" element={<ContextSelectionPage />} />
 
+          <Route element={<PermissionGuard permission="caja.abrir" />}>
+            <Route path="/caja/apertura" element={<CashOpeningPage />} />
+          </Route>
+          <Route element={<PermissionGuard anyOf={['caja.abrir', 'caja.cerrar']} />}>
+            <Route path="/caja/historial" element={<CashHistoryPage />} />
+          </Route>
+          <Route element={<PermissionGuard permission="egreso.registrar" />}>
+            <Route path="/egresos/nuevo" element={<ExpensePage />} />
+          </Route>
+          <Route element={<PermissionGuard permission="compra.registrar" />}>
+            <Route path="/compras/nueva" element={<PurchasePage />} />
+          </Route>
+
           <Route element={<OperationalContextGuard />}>
-            <Route element={<PermissionGuard permission="caja.abrir" />}>
-              <Route path="/caja/apertura" element={<CashOpeningPage />} />
-            </Route>
-            <Route element={<PermissionGuard anyOf={['caja.abrir', 'caja.cerrar']} />}>
-              <Route path="/caja/historial" element={<CashHistoryPage />} />
-            </Route>
 
             <Route element={<PermissionGuard anyOf={['caja.abrir', 'caja.cerrar']} />}>
               <Route element={<OpenCashGuard />}>
@@ -77,13 +84,6 @@ export function AppRouter() {
               <Route element={<PermissionGuard permission="venta.registrar" />}>
                 <Route path="/ventas/nueva" element={<SalesPage />} />
               </Route>
-            </Route>
-
-            <Route element={<PermissionGuard permission="egreso.registrar" />}>
-              <Route path="/egresos/nuevo" element={<ExpensePage />} />
-            </Route>
-            <Route element={<PermissionGuard permission="compra.registrar" />}>
-              <Route path="/compras/nueva" element={<PurchasePage />} />
             </Route>
             <Route element={<PermissionGuard permission="stock.consultar" />}>
               <Route path="/stock" element={<StockPage />} />

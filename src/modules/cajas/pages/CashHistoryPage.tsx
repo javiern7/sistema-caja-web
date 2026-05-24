@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { MetricCard } from '../../../components/ui/MetricCard';
 import { ResourcePageShell } from '../../../components/ui/ResourcePageShell';
 import { ResourceState } from '../../../components/ui/ResourceState';
@@ -16,6 +17,7 @@ const inputClass =
   'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-500';
 
 export function CashHistoryPage() {
+  const navigate = useNavigate();
   const activeContext = useOperationalStore((state) => state.activeContext);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [selectedCashId, setSelectedCashId] = useState<string | null>(null);
@@ -50,7 +52,22 @@ export function CashHistoryPage() {
   const normalizedMovements: CashMovementDto[] = selectedCash?.movements ?? [];
 
   if (!activeContext) {
-    return <ResourceState body="Selecciona un contexto operativo antes de consultar historial de cajas." title="Contexto pendiente" tone="warning" />;
+    return (
+      <ResourceState
+        action={
+          <button
+            className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+            onClick={() => navigate('/contexto')}
+            type="button"
+          >
+            Ir a seleccionar contexto
+          </button>
+        }
+        body="Selecciona un contexto operativo antes de consultar historial de cajas."
+        title="Contexto pendiente"
+        tone="warning"
+      />
+    );
   }
 
   return (

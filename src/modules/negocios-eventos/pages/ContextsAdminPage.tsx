@@ -102,6 +102,9 @@ export function ContextsAdminPage() {
       status,
     });
   };
+  const selectContextForEdit = (contextId: string | number) => {
+    setSelectedContextId(String(contextId));
+  };
 
   return (
     <ResourcePageShell
@@ -151,7 +154,7 @@ export function ContextsAdminPage() {
                 sortable: true,
                 sortKey: 'name',
                 render: (context) => (
-                  <button className="text-left" onClick={() => setSelectedContextId(String(context.id))} type="button">
+                  <button className="text-left" onClick={() => selectContextForEdit(context.id)} type="button">
                     <p className="font-medium text-slate-900">{context.name ?? context.nombre}</p>
                     <p className="text-xs text-slate-500">{context.code ?? 'Sin codigo'}</p>
                   </button>
@@ -169,6 +172,31 @@ export function ContextsAdminPage() {
                 ),
               },
               { key: 'status', header: 'Estado', sortable: true, sortKey: 'status', render: (context) => <StatusBadge label={String(context.status ?? context.estado ?? 'SIN_ESTADO')} tone="neutral" /> },
+              {
+                key: 'actions',
+                header: 'Acciones',
+                render: (context) => (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300"
+                      onClick={() => selectContextForEdit(context.id)}
+                      type="button"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300"
+                      onClick={() => selectContextForEdit(context.id)}
+                      type="button"
+                    >
+                      Cambiar estado
+                    </button>
+                    <span className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                      Eliminar: pendiente backend
+                    </span>
+                  </div>
+                ),
+              },
             ]}
             emptyState={<p className="text-sm text-slate-500">No hay contextos para mostrar con el criterio actual.</p>}
             isLoading={contextsQuery.isFetching}

@@ -18,7 +18,6 @@ export async function fetchCurrentStockPage(params: PaginationParams = {}) {
 export async function fetchCurrentStock() {
   return fetchAllPages((params) => fetchCurrentStockPage(params), {
     size: SELECTOR_PAGE_SIZE,
-    sort: 'productCode,asc',
   });
 }
 

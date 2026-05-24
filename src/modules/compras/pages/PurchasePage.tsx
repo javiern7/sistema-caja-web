@@ -14,6 +14,7 @@ import { DEFAULT_PAGE_SIZE } from '../../../services/api/pagination';
 import type { CancelPurchaseRequest, CreatePurchaseRequest, PurchaseDto, PurchaseListItemDto } from '../../../services/api/types';
 import { fetchProducts, fetchProviders } from '../../../services/catalogs/catalogs-api';
 import { cancelPurchase, createPurchase, fetchPurchaseDetail, fetchPurchases } from '../../../services/purchases/purchases-api';
+import { useAuthStore } from '../../../store/auth-store';
 import { useOperationalStore } from '../../../store/operational-store';
 import { formatCurrency, formatDate, formatDateTime } from '../../../utils/format';
 
@@ -88,6 +89,7 @@ function roundCurrency(value: number) {
 export function PurchasePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const hasPermission = useAuthStore((state) => state.hasPermission);
   const activeContext = useOperationalStore((state) => state.activeContext);
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<string | null>(null);
   const [lastCreatedPurchase, setLastCreatedPurchase] = useState<PurchaseDto | null>(null);
@@ -164,6 +166,10 @@ export function PurchasePage() {
   const estimatedTotal = roundCurrency(purchaseItems.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unitCost || 0), 0));
   const products = useMemo(() => (productsQuery.data ?? []).filter((product) => product.active), [productsQuery.data]);
   const providers = useMemo(() => (providersQuery.data ?? []).filter((provider) => provider.active), [providersQuery.data]);
+  const canManageProducts = hasPermission('producto.gestionar');
+  const canManageProviders = hasPermission('proveedor.gestionar');
+  const hasProducts = products.length > 0;
+  const hasProviders = providers.length > 0;
   const productMap = useMemo(() => new Map(products.map((product) => [Number(product.id), product])), [products]);
 
   const itemRowMessages = purchaseItems.map((item) => {
@@ -302,6 +308,52 @@ export function PurchasePage() {
       }
       title="Registro de compras"
     >
+      {!productsQuery.isLoading && !productsQuery.isError && !hasProducts ? (
+        <ResourceState
+          action={
+            canManageProducts ? (
+              <button
+                className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                onClick={() => navigate('/admin/productos')}
+                type="button"
+              >
+                Ir a productos
+              </button>
+            ) : undefined
+          }
+          body={
+            canManageProducts
+              ? 'Todavia no hay productos activos para cargar items de compra. Registra o activa productos antes de continuar.'
+              : 'Todavia no hay productos activos para cargar items de compra. Solicita al equipo administrador que registre o active productos.'
+          }
+          title="Productos pendientes"
+          tone="warning"
+        />
+      ) : null}
+
+      {!providersQuery.isLoading && !providersQuery.isError && !hasProviders ? (
+        <ResourceState
+          action={
+            canManageProviders ? (
+              <button
+                className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                onClick={() => navigate('/admin/proveedores')}
+                type="button"
+              >
+                Ir a proveedores
+              </button>
+            ) : undefined
+          }
+          body={
+            canManageProviders
+              ? 'Todavia no hay proveedores activos para asociar la compra. Registra o activa proveedores antes de continuar.'
+              : 'Todavia no hay proveedores activos para asociar la compra. Solicita al equipo administrador que registre o active proveedores.'
+          }
+          title="Proveedores pendientes"
+          tone="warning"
+        />
+      ) : null}
+
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
         <div className="mb-5">
           <h2 className="text-lg font-semibold text-slate-950">Registrar compra</h2>
@@ -398,6 +450,7 @@ export function PurchasePage() {
               <h3 className="text-sm font-semibold text-slate-900">Items de compra</h3>
               <button
                 className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+                disabled={!hasProducts}
                 onClick={() => itemsFieldArray.append({ productId: 0, quantity: 1, unitCost: 0 })}
                 type="button"
               >
@@ -499,7 +552,23 @@ export function PurchasePage() {
 
           {!canSubmitPurchase ? (
             <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700">
-              Completa proveedor, comprobante, metodo de pago e items validos para habilitar el guardado de la compra.
+              {!hasProviders
+                ? 'Primero necesitas al menos un proveedor activo para registrar la compra.'
+                : !hasProducts
+                  ? 'Primero necesitas al menos un producto activo para cargar items de compra.'
+                  : 'Completa proveedor, comprobante, metodo de pago e items validos para habilitar el guardado de la compra.'}
+            </div>
+          ) : null}
+
+          {productsQuery.isError ? (
+            <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {getApiErrorMessage(productsQuery.error, 'No se pudo consultar el catalogo de productos.')}
+            </div>
+          ) : null}
+
+          {providersQuery.isError ? (
+            <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {getApiErrorMessage(providersQuery.error, 'No se pudo consultar la lista de proveedores.')}
             </div>
           ) : null}
 

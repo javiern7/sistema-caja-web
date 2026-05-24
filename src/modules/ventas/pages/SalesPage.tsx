@@ -157,6 +157,8 @@ export function SalesPage() {
   const paymentDifference = roundCurrency(paymentTotal - calculatedTotal);
 
   const products = useMemo(() => (productsQuery.data ?? []).filter((product) => product.active), [productsQuery.data]);
+  const canManageProducts = hasPermission('producto.gestionar');
+  const hasProducts = products.length > 0;
   const productMap = useMemo(() => new Map(products.map((product) => [Number(product.id), product])), [products]);
   const stockMap = useMemo(
     () => new Map((stockQuery.data ?? []).map((item) => [Number(item.productId), item])),
@@ -370,6 +372,29 @@ export function SalesPage() {
       }
       title="Venta rapida"
     >
+      {!productsQuery.isLoading && !productsQuery.isError && !hasProducts ? (
+        <ResourceState
+          action={
+            canManageProducts ? (
+              <button
+                className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                onClick={() => navigate('/admin/productos')}
+                type="button"
+              >
+                Ir a productos
+              </button>
+            ) : undefined
+          }
+          body={
+            canManageProducts
+              ? 'Todavia no hay productos activos para vender. Registra o activa productos antes de continuar.'
+              : 'Todavia no hay productos activos para vender. Solicita al equipo administrador que registre o active productos.'
+          }
+          title="Productos pendientes"
+          tone="warning"
+        />
+      ) : null}
+
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
         <div className="mb-5">
           <h2 className="text-lg font-semibold text-slate-950">Registrar venta</h2>
@@ -596,7 +621,7 @@ export function SalesPage() {
             </div>
           ) : null}
 
-          {products.length === 0 && !productsQuery.isLoading ? (
+          {!hasProducts && !productsQuery.isLoading ? (
             <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700">
               No hay productos activos disponibles para registrar una venta.
             </div>

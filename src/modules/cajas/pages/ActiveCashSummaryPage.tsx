@@ -50,11 +50,11 @@ export function ActiveCashSummaryPage() {
             onClick={() => navigate('/caja/apertura')}
             type="button"
           >
-            Ir a apertura
+            Ir a apertura de caja
           </button>
         }
-        body="Todavia no hay una caja activa en el store operativo. Si acabas de entrar o cambiar de contexto, primero registra la apertura."
-        title="Caja activa pendiente"
+        body="Necesitas una caja abierta para consultar el resumen operativo. Si acabas de entrar o cambiar de contexto, primero registra la apertura."
+        title="Caja abierta pendiente"
         tone="warning"
       />
     );
@@ -139,7 +139,11 @@ export function ActiveCashSummaryPage() {
             </div>
 
             {summary.movements.length === 0 ? (
-              <ResourceState body="La caja esta abierta pero aun no registra movimientos." title="Sin movimientos todavia" tone="warning" />
+              <ResourceState
+                body="La caja esta abierta, pero todavia no registra ventas, egresos ni otros movimientos operativos."
+                title="Sin movimientos registrados"
+                tone="warning"
+              />
             ) : (
               <ResourceTable<CashMovementDto>
                 columns={[

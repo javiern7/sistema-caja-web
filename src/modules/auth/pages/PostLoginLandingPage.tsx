@@ -161,14 +161,19 @@ export function PostLoginLandingPage() {
 
         {!contextsQuery.isLoading && !contextsQuery.isError && !hasContexts ? (
           <div className="mt-4 space-y-4 rounded-3xl bg-amber-50 px-4 py-4 text-sm text-amber-700">
-            <p>La sesion esta activa, pero el backend no devolvio contextos operativos disponibles para este usuario.</p>
+            <p>
+              La sesion esta activa, pero el backend no devolvio contextos operativos disponibles para este usuario.
+              {hasPermission('negocioevento.gestionar')
+                ? ' Crea un contexto para habilitar el flujo operativo.'
+                : ' Solicita al equipo administrador que habilite al menos un contexto para continuar.'}
+            </p>
             {hasPermission('negocioevento.gestionar') ? (
               <button
                 className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
                 onClick={() => navigate('/admin/contextos')}
                 type="button"
               >
-                Ir a crear contexto
+                Ir a contextos
               </button>
             ) : null}
           </div>

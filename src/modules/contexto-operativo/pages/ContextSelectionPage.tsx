@@ -63,14 +63,19 @@ export function ContextSelectionPage() {
 
       {!contextsQuery.isLoading && !contextsQuery.isError && availableContexts.length === 0 ? (
         <div className="space-y-4 rounded-3xl bg-amber-50 px-4 py-4 text-sm text-amber-700">
-          <p>Tu usuario no tiene contextos operativos disponibles todavia.</p>
+          <p>
+            Tu usuario no tiene contextos operativos disponibles todavia.
+            {canManageContexts
+              ? ' Registra un contexto para habilitar el flujo operativo.'
+              : ' Solicita al equipo administrador que habilite al menos un contexto para continuar.'}
+          </p>
           {canManageContexts ? (
             <button
               className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
               onClick={() => navigate('/admin/contextos')}
               type="button"
             >
-              Crear contexto operativo
+              Ir a contextos
             </button>
           ) : null}
         </div>

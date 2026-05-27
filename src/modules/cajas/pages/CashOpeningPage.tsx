@@ -68,7 +68,7 @@ export function CashOpeningPage() {
           </button>
         }
         body="Primero necesitas elegir un negocio o evento para que la apertura se registre con el contexto correcto."
-        title="Contexto operativo pendiente"
+        title="Contexto pendiente"
         tone="warning"
       />
     );

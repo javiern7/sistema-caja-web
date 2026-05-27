@@ -345,7 +345,7 @@ export function ReportsHomePage() {
                   { key: 'itemsCount', header: 'Items', sortable: true, sortKey: 'itemsCount', render: (row) => String(row.itemsCount) },
                   { key: 'amount', header: 'Monto', sortable: true, sortKey: 'totalAmount', render: (row) => formatCurrency(row.totalAmount) },
                 ]}
-                emptyState={<p className="text-sm text-slate-500">No hay filas de detalle para el periodo y contexto elegidos.</p>}
+                emptyState={<p className="text-sm text-slate-500">No hay ventas para el periodo y contexto seleccionados.</p>}
                 isLoading={salesDetailQuery.isFetching}
                 onPageChange={setSalesPage}
                 onPageSizeChange={(nextSize) => {
@@ -401,7 +401,7 @@ export function ReportsHomePage() {
                     { key: 'expected', header: 'Esperado', sortable: true, sortKey: 'expectedAmount', render: (row) => formatCurrency(row.expectedAmount) },
                     { key: 'difference', header: 'Diferencia', sortable: true, sortKey: 'differenceAmount', render: (row) => formatCurrency(row.differenceAmount) },
                   ]}
-                  emptyState={<p className="text-sm text-slate-500">No hay detalle de cajas para el periodo seleccionado.</p>}
+                  emptyState={<p className="text-sm text-slate-500">No hay cajas para el periodo y contexto seleccionados.</p>}
                   isLoading={cashDetailQuery.isFetching}
                   onPageChange={setCashPage}
                   onPageSizeChange={(nextSize) => {
@@ -447,7 +447,7 @@ export function ReportsHomePage() {
                     { key: 'context', header: 'Contexto', render: (row) => row.operationalContextName ?? 'Sin contexto' },
                     { key: 'amount', header: 'Monto', sortable: true, sortKey: 'effectiveAmount', render: (row) => formatCurrency(row.effectiveAmount) },
                   ]}
-                  emptyState={<p className="text-sm text-slate-500">No hay detalle de compras para el periodo seleccionado.</p>}
+                  emptyState={<p className="text-sm text-slate-500">No hay compras para el periodo y contexto seleccionados.</p>}
                   isLoading={purchasesDetailQuery.isFetching}
                   onPageChange={setPurchasesPage}
                   onPageSizeChange={(nextSize) => {
@@ -495,7 +495,7 @@ export function ReportsHomePage() {
                     { key: 'date', header: 'Fecha', sortable: true, sortKey: 'expenseDate', render: (row) => formatDate(row.expenseDate) },
                     { key: 'amount', header: 'Monto', sortable: true, sortKey: 'amount', render: (row) => formatCurrency(row.amount) },
                   ]}
-                  emptyState={<p className="text-sm text-slate-500">No hay detalle de egresos para el periodo seleccionado.</p>}
+                  emptyState={<p className="text-sm text-slate-500">No hay egresos para el periodo y contexto seleccionados.</p>}
                   isLoading={expensesDetailQuery.isFetching}
                   onPageChange={setExpensesPage}
                   onPageSizeChange={(nextSize) => {
@@ -552,7 +552,7 @@ export function ReportsHomePage() {
                     { key: 'minimumStock', header: 'Minimo', sortable: true, sortKey: 'minimumStock', render: (row) => String(row.minimumStock) },
                     { key: 'status', header: 'Estado', sortable: true, sortKey: 'active', render: (row) => <StatusBadge label={row.active ? 'Activo' : 'Inactivo'} tone={row.active ? 'success' : 'warning'} /> },
                   ]}
-                  emptyState={<p className="text-sm text-slate-500">No hay detalle de stock para el criterio actual.</p>}
+                  emptyState={<p className="text-sm text-slate-500">No hay stock para el periodo y contexto seleccionados.</p>}
                   isLoading={stockDetailQuery.isFetching}
                   onPageChange={setStockPage}
                   onPageSizeChange={(nextSize) => {
@@ -617,7 +617,7 @@ export function ReportsHomePage() {
                   { key: 'generatedAt', header: 'Fecha', sortable: true, sortKey: 'generatedAt', render: (row) => formatDateTime(row.generatedAt) },
                   { key: 'filters', header: 'Filtros', render: (row) => <span className="text-xs text-slate-600">{row.filters ?? 'Sin filtros'}</span> },
                 ]}
-                emptyState={<p className="text-sm text-slate-500">No hay historial de reportes con los filtros actuales.</p>}
+                emptyState={<p className="text-sm text-slate-500">No hay reportes generados con los filtros actuales.</p>}
                 isLoading={historyQuery.isFetching}
                 onPageChange={setHistoryPage}
                 onPageSizeChange={(nextSize) => {
@@ -678,7 +678,7 @@ export function ReportsHomePage() {
                 { key: 'occurredAt', header: 'Fecha', sortable: true, sortKey: 'occurredAt', render: (row) => formatDateTime(row.occurredAt) },
                 { key: 'detail', header: 'Detalle', render: (row) => <span className="text-xs text-slate-600">{row.detail ?? 'Sin detalle'}</span> },
               ]}
-              emptyState={<p className="text-sm text-slate-500">No hay operaciones de auditoría con los filtros actuales.</p>}
+              emptyState={<p className="text-sm text-slate-500">No hay operaciones de auditoria con los filtros actuales.</p>}
               isLoading={auditQuery.isFetching}
               onPageChange={setAuditPage}
               onPageSizeChange={(nextSize) => {

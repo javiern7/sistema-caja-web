@@ -119,7 +119,7 @@ export function CashHistoryPage() {
       ) : null}
 
       {!cashBoxesQuery.isLoading && !cashBoxesQuery.isError && cashBoxes.length === 0 ? (
-        <ResourceState body="No hay cajas registradas para este contexto con el filtro actual." title="Historial vacio" tone="warning" />
+        <ResourceState body="No hay cajas registradas para este contexto con el filtro actual." title="Historial sin registros" tone="warning" />
       ) : null}
 
       {!cashBoxesQuery.isLoading && !cashBoxesQuery.isError && cashBoxes.length > 0 ? (
@@ -195,7 +195,7 @@ export function CashHistoryPage() {
               <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
                 <h2 className="text-lg font-semibold text-slate-950">Movimientos registrados</h2>
                 {normalizedMovements.length === 0 ? (
-                  <p className="mt-4 text-sm text-slate-600">Esta caja no reporta movimientos en la respuesta del backend.</p>
+                  <p className="mt-4 text-sm text-slate-600">Esta caja no reporta movimientos en la respuesta del backend para el detalle seleccionado.</p>
                 ) : (
                   <div className="mt-4 space-y-3">
                     {normalizedMovements.map((movement) => (

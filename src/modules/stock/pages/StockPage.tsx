@@ -128,7 +128,11 @@ export function StockPage() {
           </div>
 
           {stock.length === 0 ? (
-            <ResourceState body="El backend no devolvio registros de stock en este momento." title="Stock vacio" tone="warning" />
+            <ResourceState
+              body="Todavia no hay productos con stock visible para este criterio. Registra movimientos o revisa si el catalogo base ya fue cargado."
+              title="Stock sin registros"
+              tone="warning"
+            />
           ) : (
             <ResourceTable<StockCurrentDto>
               columns={[
@@ -233,7 +237,11 @@ export function StockPage() {
           </div>
 
           {movements.length === 0 ? (
-            <ResourceState body="Todavia no hay movimientos de stock registrados en el backend." title="Sin movimientos" tone="warning" />
+            <ResourceState
+              body="Todavia no hay movimientos de stock para este criterio. Cuando existan compras, ventas o ajustes, apareceran en este bloque."
+              title="Sin movimientos registrados"
+              tone="warning"
+            />
           ) : (
             <ResourceTable<StockMovementDto>
               columns={[

@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
@@ -64,6 +64,7 @@ export function ExpensePage() {
   const hasPermission = useAuthStore((state) => state.hasPermission);
   const canOpenCash = hasPermission('caja.abrir');
   const activeContext = useOperationalStore((state) => state.activeContext);
+  const activeContextId = activeContext ? Number(activeContext.id) : null;
   const activeCash = useOperationalStore((state) => state.activeCash);
   const [selectedExpenseId, setSelectedExpenseId] = useState<string | null>(null);
   const [lastCreatedExpense, setLastCreatedExpense] = useState<ExpenseDto | null>(null);
@@ -72,13 +73,15 @@ export function ExpensePage() {
   const [expensesSort, setExpensesSort] = useState('expenseDate,desc');
 
   const expensesQuery = useQuery({
-    queryKey: ['expenses', expensesPage, expensesPageSize, expensesSort],
+    queryKey: ['expenses', activeContextId, expensesPage, expensesPageSize, expensesSort],
     queryFn: () =>
       fetchExpenses({
+        operationalContextId: activeContextId as number,
         page: expensesPage,
         size: expensesPageSize,
         sort: expensesSort,
       }),
+    enabled: Boolean(activeContextId),
     retry: false,
     placeholderData: (previousData) => previousData,
   });
@@ -108,6 +111,7 @@ export function ExpensePage() {
   const amount = Number(watch('amount') || 0);
   const categoryOptions = categoryOptionsByType[expenseType] ?? categoryOptionsByType.ADMINISTRATIVO;
   const hasOpenCash = activeCash?.status === 'ABIERTA';
+  const requiresCash = expenseType === 'CAJA';
 
   const expenses = expensesQuery.data?.items ?? [];
   const visibleAmount = useMemo(
@@ -115,6 +119,11 @@ export function ExpensePage() {
     [expenses],
   );
   const selectedExpense = expenseDetailQuery.data ?? null;
+
+  useEffect(() => {
+    setSelectedExpenseId(null);
+    setExpensesPage(0);
+  }, [activeContextId]);
 
   const createMutation = useMutation({
     mutationFn: (payload: CreateExpenseRequest) => createExpense(payload),
@@ -130,7 +139,7 @@ export function ExpensePage() {
 
   const canSubmitExpense =
     Boolean(activeContext) &&
-    hasOpenCash &&
+    (!requiresCash || hasOpenCash) &&
     !createMutation.isPending &&
     amount > 0;
 
@@ -161,14 +170,18 @@ export function ExpensePage() {
       summary={
         <div className="grid gap-4 md:grid-cols-4">
           <MetricCard helper="Contexto al que se imputa el egreso." label="Contexto" value={activeContext.name} />
-          <MetricCard helper="Caja requerida para registrar egresos en esta pantalla." label="Caja activa" value={activeCash ? String(activeCash.id) : 'Sin caja'} />
+          <MetricCard
+            helper="Los egresos `CAJA` requieren caja abierta. Los `ADMINISTRATIVO` pueden registrarse sin caja."
+            label="Caja activa"
+            value={activeCash ? String(activeCash.id) : 'Sin caja'}
+          />
           <MetricCard helper="Total de egresos visibles luego del ultimo refresco." label="Registros" value={String(expensesQuery.data?.totalElements ?? expenses.length)} />
           <MetricCard helper="Suma de los montos visibles en el listado inferior." label="Monto acumulado" value={formatCurrency(visibleAmount)} />
         </div>
       }
       title="Registro de egresos"
     >
-      {!hasOpenCash ? (
+      {requiresCash && !hasOpenCash ? (
         <ResourceState
           action={canOpenCash ? (
             <button
@@ -196,15 +209,18 @@ export function ExpensePage() {
           <div className="mt-4 rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-slate-700">
             La categoria se esta resolviendo con un catalogo temporal de frontend para reducir errores de digitacion. Queda pendiente conectarla a un listado parametrizable desde backend o base de datos.
           </div>
+          <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            Los egresos `ADMINISTRATIVO` no requieren caja. Los egresos `CAJA` si deben asociarse a una caja activa del contexto.
+          </div>
         </div>
 
         <form
           className="grid gap-4 md:grid-cols-2"
           onSubmit={handleSubmit((values) => {
-            if (!hasOpenCash || !activeCash) {
+            if (values.expenseType === 'CAJA' && (!hasOpenCash || !activeCash)) {
               setError('expenseType', {
                 type: 'manual',
-                message: 'No se puede registrar un egreso sin caja activa.',
+                message: 'No se puede registrar un egreso de caja sin caja activa.',
               });
               return;
             }
@@ -220,7 +236,7 @@ export function ExpensePage() {
 
             createMutation.mutate({
               operationalContextId: Number(activeContext.id),
-              cashBoxId: Number(activeCash.id),
+              cashBoxId: values.expenseType === 'CAJA' && activeCash ? Number(activeCash.id) : undefined,
               expenseType: values.expenseType,
               category: values.category,
               description: values.description,
@@ -333,15 +349,17 @@ export function ExpensePage() {
             </div>
           </div>
 
-          {!hasOpenCash ? (
+          {requiresCash && !hasOpenCash ? (
             <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700 md:col-span-2">
-              No se puede registrar un egreso sin caja activa. Abre o selecciona una caja antes de continuar.
+              No se puede registrar un egreso de caja sin caja activa. Abre o selecciona una caja antes de continuar.
             </div>
           ) : null}
 
           {!canSubmitExpense ? (
             <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700 md:col-span-2">
-              Completa todos los campos obligatorios y verifica que exista una caja activa para habilitar el guardado.
+              {requiresCash
+                ? 'Completa todos los campos obligatorios y verifica que exista una caja activa para habilitar el guardado.'
+                : 'Completa todos los campos obligatorios para habilitar el guardado.'}
             </div>
           ) : null}
 

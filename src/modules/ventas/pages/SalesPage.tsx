@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFieldArray, useForm } from 'react-hook-form';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { MetricCard } from '../../../components/ui/MetricCard';
@@ -79,14 +79,18 @@ export function SalesPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const hasPermission = useAuthStore((state) => state.hasPermission);
+  const canRegisterSales = hasPermission('venta.registrar');
+  const canCancelSales = hasPermission('venta.anular');
   const canOpenCash = hasPermission('caja.abrir');
   const activeContext = useOperationalStore((state) => state.activeContext);
+  const activeContextId = activeContext ? Number(activeContext.id) : null;
   const activeCash = useOperationalStore((state) => state.activeCash);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [lastCreatedSale, setLastCreatedSale] = useState<SaleDto | null>(null);
   const [salesPage, setSalesPage] = useState(0);
   const [salesPageSize, setSalesPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [salesSort, setSalesSort] = useState('createdAt,desc');
+  const initializedCancelFormSaleIdRef = useRef<string | null>(null);
 
   const productsQuery = useQuery({
     queryKey: ['admin', 'productos'],
@@ -95,19 +99,22 @@ export function SalesPage() {
   });
 
   const stockQuery = useQuery({
-    queryKey: ['stock', 'current'],
-    queryFn: fetchCurrentStock,
+    queryKey: ['stock', 'current', activeContextId],
+    queryFn: () => fetchCurrentStock(activeContextId as number),
+    enabled: Boolean(activeContextId),
     retry: false,
   });
 
   const salesQuery = useQuery({
-    queryKey: ['sales', salesPage, salesPageSize, salesSort],
+    queryKey: ['sales', activeContextId, salesPage, salesPageSize, salesSort],
     queryFn: () =>
       fetchSales({
+        operationalContextId: activeContextId as number,
         page: salesPage,
         size: salesPageSize,
         sort: salesSort,
       }),
+    enabled: Boolean(activeContextId),
     retry: false,
     placeholderData: (previousData) => previousData,
   });
@@ -271,10 +278,37 @@ export function SalesPage() {
       cancelForm.reset({ reason: '' });
       queryClient.setQueryData(['sales', 'detail', selectedSaleId], sale);
       queryClient.invalidateQueries({ queryKey: ['sales'] });
-      queryClient.invalidateQueries({ queryKey: ['cash-box', 'summary'] });
+      queryClient.invalidateQueries({ queryKey: ['cash-box'] });
       queryClient.invalidateQueries({ queryKey: ['stock'] });
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
     },
   });
+
+  useEffect(() => {
+    setSelectedSaleId(null);
+    setSalesPage(0);
+    initializedCancelFormSaleIdRef.current = null;
+  }, [activeContextId]);
+
+  useEffect(() => {
+    initializedCancelFormSaleIdRef.current = null;
+    cancelMutation.reset();
+    cancelForm.reset({ reason: '' });
+  }, [cancelForm, selectedSaleId]);
+
+  useEffect(() => {
+    if (!saleDetailQuery.data) {
+      return;
+    }
+
+    const saleId = String(saleDetailQuery.data.id);
+    if (initializedCancelFormSaleIdRef.current === saleId) {
+      return;
+    }
+
+    cancelForm.reset({ reason: '' });
+    initializedCancelFormSaleIdRef.current = saleId;
+  }, [cancelForm, saleDetailQuery.data]);
 
   const canSubmitSale =
     Boolean(activeContext) &&
@@ -290,83 +324,18 @@ export function SalesPage() {
     paymentTotal > 0 &&
     paymentDifference === 0;
 
-  if (!activeContext) {
-    return (
-      <ResourceState
-        action={
-          <button
-            className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-            onClick={() => navigate('/contexto')}
-            type="button"
-          >
-            Ir a seleccionar contexto
-          </button>
-        }
-        body="Selecciona un contexto operativo antes de registrar ventas."
-        title="Contexto pendiente"
-        tone="warning"
-      />
-    );
-  }
-
-  if (!activeCash) {
-    return (
-      <ResourceState
-        action={canOpenCash ? (
-          <button
-            className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-            onClick={() => navigate('/caja/apertura')}
-            type="button"
-          >
-            Ir a apertura de caja
-          </button>
-        ) : undefined}
-        body={
-          canOpenCash
-            ? 'Necesitas contexto operativo y caja abierta para registrar ventas reales.'
-            : 'Necesitas una caja abierta para registrar ventas reales. Solicita a un usuario con permiso de apertura que habilite la caja.'
-        }
-        title="Venta no disponible"
-        tone="warning"
-      />
-    );
-  }
-
-  if (activeCash.status !== 'ABIERTA') {
-    return (
-      <ResourceState
-        action={canOpenCash ? (
-          <button
-            className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-            onClick={() => navigate('/caja/apertura')}
-            type="button"
-          >
-            Ir a apertura de caja
-          </button>
-        ) : undefined}
-        body={
-          canOpenCash
-            ? 'La caja visible en el estado operativo ya no esta abierta. Debes abrir una nueva caja antes de registrar ventas.'
-            : 'La caja visible en el estado operativo ya no esta abierta. Solicita a un usuario con permiso de apertura que habilite una nueva caja.'
-        }
-        title="Caja abierta pendiente"
-        tone="warning"
-      />
-    );
-  }
-
   const sales = salesQuery.data?.items ?? [];
   const selectedSale = saleDetailQuery.data ?? null;
 
   return (
     <ResourcePageShell
-      badge="FE-VTA-001 Venta real"
-      description="Pantalla conectada a `GET /api/v1/ventas`, `GET /api/v1/ventas/{saleId}` y `POST /api/v1/ventas/{saleId}/anulacion` usando caja activa, items y pagos reales contra backend."
+      badge="FE-VTA-001 Ventas reales"
+      description="Pantalla conectada a `GET /api/v1/ventas`, `GET /api/v1/ventas/{saleId}` y `POST /api/v1/ventas/{saleId}/anulacion` para registrar, consultar y anular ventas segun el permiso real disponible en backend."
       documents={['04 - HU-VTA-001', '18 - API-VTA-001/API-VTA-002/API-VTA-003', '26 - Frontend Fase operativa']}
       summary={
         <div className="grid gap-4 md:grid-cols-4">
-          <MetricCard helper="Caja que recibira la venta." label="Caja activa" value={String(activeCash.id)} />
-          <MetricCard helper="Contexto operativo enviado al backend." label="Contexto" value={activeContext.name} />
+          <MetricCard helper="Caja que recibira la venta." label="Caja activa" value={activeCash ? String(activeCash.id) : 'Sin caja'} />
+          <MetricCard helper="Contexto operativo enviado al backend." label="Contexto" value={activeContext?.name ?? 'Sin contexto'} />
           <MetricCard
             helper="Se mostrara cuando registres al menos un item valido en el formulario."
             label="Total venta"
@@ -379,32 +348,91 @@ export function SalesPage() {
           />
         </div>
       }
-      title="Venta rapida"
+      title="Ventas y anulaciones"
     >
-      {!productsQuery.isLoading && !productsQuery.isError && !hasProducts ? (
+      {!canRegisterSales ? (
+        <div className="rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700">
+          Tu sesion puede consultar ventas y, si corresponde, anularlas con `venta.anular`, pero no registrar nuevas ventas.
+        </div>
+      ) : !activeContext ? (
         <ResourceState
           action={
-            canManageProducts ? (
-              <button
-                className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-                onClick={() => navigate('/admin/productos')}
-                type="button"
-              >
-                Ir a productos
-              </button>
-            ) : undefined
+            <button
+              className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              onClick={() => navigate('/contexto')}
+              type="button"
+            >
+              Ir a seleccionar contexto
+            </button>
           }
-          body={
-            canManageProducts
-              ? 'Todavia no hay productos activos para vender. Registra o activa productos antes de continuar.'
-              : 'Todavia no hay productos activos para vender. Solicita al equipo administrador que registre o active productos.'
-          }
-          title="Productos pendientes"
+          body="Selecciona un contexto operativo antes de registrar ventas."
+          title="Contexto pendiente"
           tone="warning"
         />
-      ) : null}
+      ) : !activeCash ? (
+        <ResourceState
+          action={canOpenCash ? (
+            <button
+              className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              onClick={() => navigate('/caja/apertura')}
+              type="button"
+            >
+              Ir a apertura de caja
+            </button>
+          ) : undefined}
+          body={
+            canOpenCash
+              ? 'Necesitas contexto operativo y caja abierta para registrar ventas reales.'
+              : 'Necesitas una caja abierta para registrar ventas reales. Solicita a un usuario con permiso de apertura que habilite la caja.'
+          }
+          title="Venta no disponible"
+          tone="warning"
+        />
+      ) : activeCash.status !== 'ABIERTA' ? (
+        <ResourceState
+          action={canOpenCash ? (
+            <button
+              className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              onClick={() => navigate('/caja/apertura')}
+              type="button"
+            >
+              Ir a apertura de caja
+            </button>
+          ) : undefined}
+          body={
+            canOpenCash
+              ? 'La caja visible en el estado operativo ya no esta abierta. Debes abrir una nueva caja antes de registrar ventas.'
+              : 'La caja visible en el estado operativo ya no esta abierta. Solicita a un usuario con permiso de apertura que habilite una nueva caja.'
+          }
+          title="Caja abierta pendiente"
+          tone="warning"
+        />
+      ) : (
+        <>
+          {!productsQuery.isLoading && !productsQuery.isError && !hasProducts ? (
+            <ResourceState
+              action={
+                canManageProducts ? (
+                  <button
+                    className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                    onClick={() => navigate('/admin/productos')}
+                    type="button"
+                  >
+                    Ir a productos
+                  </button>
+                ) : undefined
+              }
+              body={
+                canManageProducts
+                  ? 'Todavia no hay productos activos para vender. Registra o activa productos antes de continuar.'
+                  : 'Todavia no hay productos activos para vender. Solicita al equipo administrador que registre o active productos.'
+              }
+              title="Productos pendientes"
+              tone="warning"
+            />
+          ) : null}
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
         <div className="mb-5">
           <h2 className="text-lg font-semibold text-slate-950">Registrar venta</h2>
           <p className="mt-2 text-sm text-slate-600">Selecciona un producto, ingresa cantidad, verifica el total y registra el pago antes de guardar la venta.</p>
@@ -660,11 +688,30 @@ export function SalesPage() {
             {createMutation.isPending ? 'Registrando venta...' : 'Guardar venta'}
           </button>
         </form>
-      </section>
+          </section>
+        </>
+      )}
 
-      {salesQuery.isLoading ? <ResourceState body="Consultando ventas registradas..." title="Cargando ventas" /> : null}
+      {!activeContext ? (
+        <ResourceState
+          action={
+            <button
+              className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              onClick={() => navigate('/contexto')}
+              type="button"
+            >
+              Ir a seleccionar contexto
+            </button>
+          }
+          body="Selecciona un contexto operativo para consultar ventas, detalle y anulaciones sin mezclar datos entre negocios o eventos."
+          title="Contexto requerido para listar ventas"
+          tone="warning"
+        />
+      ) : null}
 
-      {salesQuery.isError ? (
+      {activeContext && salesQuery.isLoading ? <ResourceState body="Consultando ventas registradas..." title="Cargando ventas" /> : null}
+
+      {activeContext && salesQuery.isError ? (
         <ResourceState
           body={getApiErrorMessage(salesQuery.error, 'No se pudieron consultar las ventas.')}
           title="Error al consultar ventas"
@@ -672,7 +719,7 @@ export function SalesPage() {
         />
       ) : null}
 
-      {!salesQuery.isLoading && !salesQuery.isError ? (
+      {activeContext && !salesQuery.isLoading && !salesQuery.isError ? (
         <>
           <ResourceTable<SaleListItemDto>
             columns={[
@@ -684,7 +731,7 @@ export function SalesPage() {
                 render: (sale) => (
                   <button className="text-left" onClick={() => setSelectedSaleId(String(sale.id))} type="button">
                     <p className="font-medium text-slate-900">{`${sale.internalReceiptSeries ?? 'INT'}-${sale.internalReceiptNumber ?? sale.id}`}</p>
-                    <p className="text-xs text-slate-500">{sale.operationalContextName ?? activeContext.name}</p>
+                    <p className="text-xs text-slate-500">{sale.operationalContextName ?? activeContext?.name ?? 'Contexto no disponible'}</p>
                   </button>
                 ),
               },
@@ -737,7 +784,7 @@ export function SalesPage() {
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <h2 className="text-lg font-semibold text-slate-950">Detalle de venta #{selectedSale?.id ?? selectedSaleId}</h2>
-                    <p className="mt-1 text-sm text-slate-600">{selectedSale?.operationalContextName ?? activeContext.name}</p>
+                    <p className="mt-1 text-sm text-slate-600">{selectedSale?.operationalContextName ?? activeContext?.name ?? 'Contexto no disponible'}</p>
                   </div>
                   {selectedSale ? (
                     <StatusBadge label={selectedSale.status} tone={selectedSale.status === 'ANULADA' ? 'warning' : 'success'} />
@@ -793,6 +840,8 @@ export function SalesPage() {
                       <div className="text-sm text-slate-600">
                         <p><span className="font-medium text-slate-900">Observacion:</span> {selectedSale.observation ?? 'Sin observacion'}</p>
                         <p><span className="font-medium text-slate-900">Motivo de anulacion:</span> {selectedSale.cancellationReason ?? 'No aplica'}</p>
+                        <p><span className="font-medium text-slate-900">Anulada por:</span> {selectedSale.cancelledByUsername ?? 'No aplica'}</p>
+                        <p><span className="font-medium text-slate-900">Fecha de anulacion:</span> {formatDateTime(selectedSale.cancelledAt)}</p>
                       </div>
                     </div>
                   </>
@@ -803,13 +852,30 @@ export function SalesPage() {
                 <h2 className="text-lg font-semibold text-slate-950">Anulacion de venta</h2>
                 <p className="mt-2 text-sm text-slate-600">Disponible solo si la sesion tiene permiso `venta.anular` y la venta aun no fue anulada.</p>
 
-                {!hasPermission('venta.anular') ? (
+                {!canCancelSales ? (
                   <div className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700">
                     Tu sesion no tiene permiso para anular ventas.
                   </div>
                 ) : null}
 
-                <form className="mt-5 space-y-4" onSubmit={cancelForm.handleSubmit((values) => cancelMutation.mutate(values))}>
+                <form
+                  className="mt-5 space-y-4"
+                  onSubmit={cancelForm.handleSubmit((values) => {
+                    if (!selectedSale) {
+                      return;
+                    }
+
+                    const shouldContinue = window.confirm(
+                      `¿Confirmas anular la venta ${selectedSale.internalReceiptSeries ?? 'INT'}-${selectedSale.internalReceiptNumber ?? selectedSale.id}?\nTotal: ${formatCurrency(selectedSale.totalAmount)}\nEsta accion debe revertir stock y caja segun el contrato real.`,
+                    );
+
+                    if (!shouldContinue) {
+                      return;
+                    }
+
+                    cancelMutation.mutate(values);
+                  })}
+                >
                   <label className="space-y-2">
                     <span className="text-sm font-medium text-slate-700">Motivo</span>
                     <textarea className={`${inputClass} min-h-28`} {...cancelForm.register('reason')} />
@@ -825,12 +891,14 @@ export function SalesPage() {
                   ) : null}
 
                   {cancelMutation.isSuccess ? (
-                    <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Venta anulada correctamente.</div>
+                    <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                      Venta anulada correctamente. El listado, el stock, la caja activa y los reportes en cache se refrescaron contra el contrato actual.
+                    </div>
                   ) : null}
 
                   <button
                     className="w-full rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-400"
-                    disabled={!hasPermission('venta.anular') || selectedSale?.status === 'ANULADA' || cancelMutation.isPending}
+                    disabled={!canCancelSales || !selectedSale || selectedSale.status === 'ANULADA' || cancelMutation.isPending}
                     type="submit"
                   >
                     {cancelMutation.isPending ? 'Anulando venta...' : 'Anular venta'}

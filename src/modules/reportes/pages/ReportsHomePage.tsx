@@ -65,6 +65,7 @@ function ReportPanel({ badge, title, tone, description, children }: ReportPanelP
 export function ReportsHomePage() {
   const hasPermission = useAuthStore((state) => state.hasPermission);
   const activeContext = useOperationalStore((state) => state.activeContext);
+  const activeContextId = activeContext ? Number(activeContext.id) : null;
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [moduleFilter, setModuleFilter] = useState('');
@@ -148,14 +149,14 @@ export function ReportsHomePage() {
   const salesSummaryQuery = useQuery({
     queryKey: ['reports', 'sales', reportFilters],
     queryFn: () => fetchSalesReport(reportFilters),
-    enabled: canViewSales,
+    enabled: canViewSales && Boolean(activeContextId),
     retry: false,
   });
 
   const salesDetailQuery = useQuery({
     queryKey: ['reports', 'sales', 'detail', reportFilters, salesPage, salesPageSize, salesSort],
     queryFn: () => fetchSalesReportDetail({ ...reportFilters, page: salesPage, size: salesPageSize, sort: salesSort }),
-    enabled: canViewSales,
+    enabled: canViewSales && Boolean(activeContextId),
     retry: false,
     placeholderData: (previousData) => previousData,
   });
@@ -163,14 +164,14 @@ export function ReportsHomePage() {
   const cashSummaryQuery = useQuery({
     queryKey: ['reports', 'cash', reportFilters],
     queryFn: () => fetchCashReport(reportFilters),
-    enabled: canViewCash,
+    enabled: canViewCash && Boolean(activeContextId),
     retry: false,
   });
 
   const cashDetailQuery = useQuery({
     queryKey: ['reports', 'cash', 'detail', reportFilters, cashPage, cashPageSize, cashSort],
     queryFn: () => fetchCashReportDetail({ ...reportFilters, page: cashPage, size: cashPageSize, sort: cashSort }),
-    enabled: canViewCash,
+    enabled: canViewCash && Boolean(activeContextId),
     retry: false,
     placeholderData: (previousData) => previousData,
   });
@@ -178,7 +179,7 @@ export function ReportsHomePage() {
   const purchasesSummaryQuery = useQuery({
     queryKey: ['reports', 'purchases', reportFilters],
     queryFn: () => fetchPurchaseReport(reportFilters),
-    enabled: canViewPurchases,
+    enabled: canViewPurchases && Boolean(activeContextId),
     retry: false,
   });
 
@@ -186,7 +187,7 @@ export function ReportsHomePage() {
     queryKey: ['reports', 'purchases', 'detail', reportFilters, purchasesPage, purchasesPageSize, purchasesSort],
     queryFn: () =>
       fetchPurchaseReportDetail({ ...reportFilters, page: purchasesPage, size: purchasesPageSize, sort: purchasesSort }),
-    enabled: canViewPurchases,
+    enabled: canViewPurchases && Boolean(activeContextId),
     retry: false,
     placeholderData: (previousData) => previousData,
   });
@@ -194,7 +195,7 @@ export function ReportsHomePage() {
   const expensesSummaryQuery = useQuery({
     queryKey: ['reports', 'expenses', reportFilters],
     queryFn: () => fetchExpenseReport(reportFilters),
-    enabled: canViewExpenses,
+    enabled: canViewExpenses && Boolean(activeContextId),
     retry: false,
   });
 
@@ -202,7 +203,7 @@ export function ReportsHomePage() {
     queryKey: ['reports', 'expenses', 'detail', reportFilters, expensesPage, expensesPageSize, expensesSort],
     queryFn: () =>
       fetchExpenseReportDetail({ ...reportFilters, page: expensesPage, size: expensesPageSize, sort: expensesSort }),
-    enabled: canViewExpenses,
+    enabled: canViewExpenses && Boolean(activeContextId),
     retry: false,
     placeholderData: (previousData) => previousData,
   });
@@ -210,14 +211,14 @@ export function ReportsHomePage() {
   const stockSummaryQuery = useQuery({
     queryKey: ['reports', 'stock', reportFilters],
     queryFn: () => fetchStockReport(reportFilters),
-    enabled: canViewStock,
+    enabled: canViewStock && Boolean(activeContextId),
     retry: false,
   });
 
   const stockDetailQuery = useQuery({
     queryKey: ['reports', 'stock', 'detail', reportFilters, stockPage, stockPageSize, stockSort],
     queryFn: () => fetchStockReportDetail({ ...reportFilters, page: stockPage, size: stockPageSize, sort: stockSort }),
-    enabled: canViewStock,
+    enabled: canViewStock && Boolean(activeContextId),
     retry: false,
     placeholderData: (previousData) => previousData,
   });
@@ -225,7 +226,7 @@ export function ReportsHomePage() {
   const utilityQuery = useQuery({
     queryKey: ['reports', 'utility', reportFilters],
     queryFn: () => fetchUtilityReport(reportFilters),
-    enabled: canViewUtility,
+    enabled: canViewUtility && Boolean(activeContextId),
     retry: false,
   });
 
@@ -305,12 +306,20 @@ export function ReportsHomePage() {
 
         <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
           {activeContext
-            ? `Los reportes operativos se consultan contra el contexto activo ${activeContext.name} (ID ${activeContext.id}) cuando el endpoint admite operationalContextId.`
-            : 'Si no hay contexto activo, los reportes se consultan sin filtro de contexto.'}
+            ? `Los reportes operativos se consultan contra el contexto activo ${activeContext.name} (ID ${activeContext.id}).`
+            : 'Selecciona un contexto activo antes de consultar ventas, caja, compras, egresos, stock y utilidad.'}
         </div>
       </section>
 
-      {canViewSales ? (
+      {!activeContext ? (
+        <ResourceState
+          body="Los bloques de reportes operativos quedan pausados hasta que selecciones un contexto activo. Auditoria, historial y health check pueden seguir consultandose aparte."
+          title="Contexto requerido para reportes operativos"
+          tone="warning"
+        />
+      ) : null}
+
+      {canViewSales && activeContext ? (
         <ReportPanel
           badge={salesSummaryQuery.isLoading ? 'Cargando' : salesSummaryQuery.isError ? 'Error' : 'Listo'}
           description="Contrato real `GET /api/v1/reportes/ventas`."
@@ -369,7 +378,7 @@ export function ReportsHomePage() {
       ) : null}
 
       <section className="grid gap-6 xl:grid-cols-2">
-        {canViewCash ? (
+        {canViewCash && activeContext ? (
           <ReportPanel
             badge={cashSummaryQuery.isLoading ? 'Cargando' : cashSummaryQuery.isError ? 'Error' : 'Listo'}
             description="Contrato real `GET /api/v1/reportes/caja`."
@@ -424,7 +433,7 @@ export function ReportsHomePage() {
           </ReportPanel>
         ) : null}
 
-        {canViewPurchases ? (
+        {canViewPurchases && activeContext ? (
           <ReportPanel
             badge={purchasesSummaryQuery.isLoading ? 'Cargando' : purchasesSummaryQuery.isError ? 'Error' : 'Listo'}
             description="Contrato real `GET /api/v1/reportes/compras`."
@@ -472,7 +481,7 @@ export function ReportsHomePage() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
-        {canViewExpenses ? (
+        {canViewExpenses && activeContext ? (
           <ReportPanel
             badge={expensesSummaryQuery.isLoading ? 'Cargando' : expensesSummaryQuery.isError ? 'Error' : 'Listo'}
             description="Contrato real `GET /api/v1/reportes/egresos`."
@@ -518,7 +527,7 @@ export function ReportsHomePage() {
           </ReportPanel>
         ) : null}
 
-        {canViewStock ? (
+        {canViewStock && activeContext ? (
           <ReportPanel
             badge={stockSummaryQuery.isLoading ? 'Cargando' : stockSummaryQuery.isError ? 'Error' : 'Listo'}
             description="Contrato real `GET /api/v1/reportes/stock`."
@@ -577,7 +586,7 @@ export function ReportsHomePage() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
-        {canViewUtility ? (
+        {canViewUtility && activeContext ? (
           <ReportPanel
             badge={utilityQuery.isLoading ? 'Cargando' : utilityQuery.isError ? 'Error' : 'Listo'}
             description="Contrato real `GET /api/v1/reportes/utilidad`."

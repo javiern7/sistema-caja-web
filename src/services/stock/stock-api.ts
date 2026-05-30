@@ -8,28 +8,32 @@ import type {
   StockMovementDto,
 } from '../api/types';
 
-export async function fetchCurrentStockPage(params: PaginationParams = {}) {
+type StockQueryParams = PaginationParams & {
+  operationalContextId: number;
+};
+
+export async function fetchCurrentStockPage(params: StockQueryParams) {
   const response = await httpClient.get<ApiResponse<PaginatedResponse<StockCurrentDto>>>(
     `/stock${buildQueryString(params)}`,
   );
   return response.data;
 }
 
-export async function fetchCurrentStock() {
-  return fetchAllPages((params) => fetchCurrentStockPage(params), {
+export async function fetchCurrentStock(operationalContextId: number) {
+  return fetchAllPages((params) => fetchCurrentStockPage({ ...params, operationalContextId }), {
     size: SELECTOR_PAGE_SIZE,
   });
 }
 
-export async function fetchStockMovementsPage(params: PaginationParams = {}) {
+export async function fetchStockMovementsPage(params: StockQueryParams) {
   const response = await httpClient.get<ApiResponse<PaginatedResponse<StockMovementDto>>>(
     `/stock/movimientos${buildQueryString(params)}`,
   );
   return response.data;
 }
 
-export async function fetchStockMovements() {
-  return fetchAllPages((params) => fetchStockMovementsPage(params), {
+export async function fetchStockMovements(operationalContextId: number) {
+  return fetchAllPages((params) => fetchStockMovementsPage({ ...params, operationalContextId }), {
     size: SELECTOR_PAGE_SIZE,
     sort: 'occurredAt,desc',
   });

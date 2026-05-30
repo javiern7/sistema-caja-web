@@ -94,7 +94,7 @@ export function OperationalLayout() {
     { to: '/caja/apertura', label: 'Apertura', visible: hasPermission('caja.abrir') },
     { to: '/caja/activa', label: 'Caja activa', visible: canReadCash },
     { to: '/caja/historial', label: 'Historial cajas', visible: canReadCash && Boolean(activeContext) },
-    { to: '/ventas/nueva', label: 'Venta rapida', visible: hasPermission('venta.registrar') },
+    { to: '/ventas/nueva', label: 'Ventas', visible: hasPermission('venta.registrar') || hasPermission('venta.anular') },
     { to: '/egresos/nuevo', label: 'Egresos', visible: hasPermission('egreso.registrar') },
     { to: '/compras/nueva', label: 'Compras', visible: hasPermission('compra.registrar') },
     { to: '/admin/productos', label: 'Productos', visible: canReadProducts },

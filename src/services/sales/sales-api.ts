@@ -10,7 +10,11 @@ import type {
   SaleListItemDto,
 } from '../api/types';
 
-export async function fetchSales(params: PaginationParams = {}) {
+type SalesQueryParams = PaginationParams & {
+  operationalContextId: number;
+};
+
+export async function fetchSales(params: SalesQueryParams) {
   const response = await httpClient.get<ApiResponse<PaginatedResponse<SaleListItemDto>>>(
     `/ventas${buildQueryString(params)}`,
   );

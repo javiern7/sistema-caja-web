@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFieldArray, useForm } from 'react-hook-form';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { MetricCard } from '../../../components/ui/MetricCard';
@@ -90,12 +90,15 @@ export function PurchasePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const hasPermission = useAuthStore((state) => state.hasPermission);
+  const canRegisterPurchases = hasPermission('compra.registrar');
   const activeContext = useOperationalStore((state) => state.activeContext);
+  const activeContextId = activeContext ? Number(activeContext.id) : null;
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<string | null>(null);
   const [lastCreatedPurchase, setLastCreatedPurchase] = useState<PurchaseDto | null>(null);
   const [purchasesPage, setPurchasesPage] = useState(0);
   const [purchasesPageSize, setPurchasesPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [purchasesSort, setPurchasesSort] = useState('purchaseDate,desc');
+  const initializedCancelFormPurchaseIdRef = useRef<string | null>(null);
 
   const productsQuery = useQuery({
     queryKey: ['admin', 'productos'],
@@ -110,13 +113,15 @@ export function PurchasePage() {
   });
 
   const purchasesQuery = useQuery({
-    queryKey: ['purchases', purchasesPage, purchasesPageSize, purchasesSort],
+    queryKey: ['purchases', activeContextId, purchasesPage, purchasesPageSize, purchasesSort],
     queryFn: () =>
       fetchPurchases({
+        operationalContextId: activeContextId as number,
         page: purchasesPage,
         size: purchasesPageSize,
         sort: purchasesSort,
       }),
+    enabled: Boolean(activeContextId),
     retry: false,
     placeholderData: (previousData) => previousData,
   });
@@ -229,11 +234,32 @@ export function PurchasePage() {
       queryClient.setQueryData(['purchases', 'detail', selectedPurchaseId], purchase);
       queryClient.invalidateQueries({ queryKey: ['purchases'] });
       queryClient.invalidateQueries({ queryKey: ['stock'] });
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
     },
   });
 
   useEffect(() => {
+    setSelectedPurchaseId(null);
+    setPurchasesPage(0);
+    initializedCancelFormPurchaseIdRef.current = null;
+  }, [activeContextId]);
+
+  useEffect(() => {
+    initializedCancelFormPurchaseIdRef.current = null;
+    cancelMutation.reset();
+    cancelForm.reset({
+      reason: '',
+      cancelledItems: [],
+    });
+  }, [cancelForm, selectedPurchaseId]);
+
+  useEffect(() => {
     if (!purchaseDetailQuery.data) {
+      return;
+    }
+
+    const purchaseId = String(purchaseDetailQuery.data.id);
+    if (initializedCancelFormPurchaseIdRef.current === purchaseId) {
       return;
     }
 
@@ -244,6 +270,7 @@ export function PurchasePage() {
         cancelledQuantity: Math.max(Number(item.quantity) - Number(item.cancelledQuantity), 0),
       })),
     });
+    initializedCancelFormPurchaseIdRef.current = purchaseId;
   }, [cancelForm, purchaseDetailQuery.data]);
 
   useEffect(() => {
@@ -263,28 +290,10 @@ export function PurchasePage() {
     });
   }, [productMap, purchaseItems, setValue]);
 
-  if (!activeContext) {
-    return (
-      <ResourceState
-        action={
-          <button
-            className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-            onClick={() => navigate('/contexto')}
-            type="button"
-          >
-            Ir a seleccionar contexto
-          </button>
-        }
-        body="Selecciona un contexto operativo antes de registrar compras."
-        title="Contexto pendiente"
-        tone="warning"
-      />
-    );
-  }
-
   const purchases = purchasesQuery.data?.items ?? [];
   const selectedPurchase = purchaseDetailQuery.data ?? null;
   const canSubmitPurchase =
+    Boolean(activeContext) &&
     providerId > 0 &&
     Boolean(paymentMethod?.trim()) &&
     purchaseItems.length > 0 &&
@@ -295,66 +304,87 @@ export function PurchasePage() {
 
   return (
     <ResourcePageShell
-      badge="FE-CMP-001 Compra real"
-      description="Pantalla conectada a `GET /api/v1/compras`, `GET /api/v1/compras/{purchaseId}` y `POST /api/v1/compras/{purchaseId}/anulacion` usando proveedores y productos reales del backend."
+      badge="FE-CMP-001 Compras reales"
+      description="Pantalla conectada a `GET /api/v1/compras`, `GET /api/v1/compras/{purchaseId}` y `POST /api/v1/compras/{purchaseId}/anulacion` usando el mismo permiso real que hoy exige el backend para registrar y anular compras."
       documents={['04 - HU-CMP-001', '18 - API-CMP-001/API-CMP-002/API-CMP-003', '26 - Frontend Fase operativa']}
       summary={
         <div className="grid gap-4 md:grid-cols-4">
-          <MetricCard helper="Contexto al que se imputa la compra." label="Contexto" value={activeContext.name} />
+          <MetricCard helper="Contexto al que se imputa la compra." label="Contexto" value={activeContext?.name ?? 'Sin contexto'} />
           <MetricCard helper="Base para completar el documento." label="Proveedores activos" value={String(providers.length)} />
           <MetricCard helper="Base para items de compra." label="Productos activos" value={String(products.length)} />
           <MetricCard helper="Suma estimada del formulario actual." label="Total estimado" value={formatCurrency(estimatedTotal)} />
         </div>
       }
-      title="Registro de compras"
+      title="Compras y anulaciones"
     >
-      {!productsQuery.isLoading && !productsQuery.isError && !hasProducts ? (
+      {!canRegisterPurchases ? (
+        <div className="rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700">
+          Tu sesion no tiene el permiso real que hoy usa backend para registrar o anular compras.
+        </div>
+      ) : !activeContext ? (
         <ResourceState
           action={
-            canManageProducts ? (
-              <button
-                className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-                onClick={() => navigate('/admin/productos')}
-                type="button"
-              >
-                Ir a productos
-              </button>
-            ) : undefined
+            <button
+              className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              onClick={() => navigate('/contexto')}
+              type="button"
+            >
+              Ir a seleccionar contexto
+            </button>
           }
-          body={
-            canManageProducts
-              ? 'Todavia no hay productos activos para cargar items de compra. Registra o activa productos antes de continuar.'
-              : 'Todavia no hay productos activos para cargar items de compra. Solicita al equipo administrador que registre o active productos.'
-          }
-          title="Productos pendientes"
+          body="Selecciona un contexto operativo antes de registrar nuevas compras o consultar el universo aislado de compras del negocio o evento."
+          title="Contexto pendiente"
           tone="warning"
         />
-      ) : null}
+      ) : (
+        <>
+          {!productsQuery.isLoading && !productsQuery.isError && !hasProducts ? (
+            <ResourceState
+              action={
+                canManageProducts ? (
+                  <button
+                    className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                    onClick={() => navigate('/admin/productos')}
+                    type="button"
+                  >
+                    Ir a productos
+                  </button>
+                ) : undefined
+              }
+              body={
+                canManageProducts
+                  ? 'Todavia no hay productos activos para cargar items de compra. Registra o activa productos antes de continuar.'
+                  : 'Todavia no hay productos activos para cargar items de compra. Solicita al equipo administrador que registre o active productos.'
+              }
+              title="Productos pendientes"
+              tone="warning"
+            />
+          ) : null}
 
-      {!providersQuery.isLoading && !providersQuery.isError && !hasProviders ? (
-        <ResourceState
-          action={
-            canManageProviders ? (
-              <button
-                className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-                onClick={() => navigate('/admin/proveedores')}
-                type="button"
-              >
-                Ir a proveedores
-              </button>
-            ) : undefined
-          }
-          body={
-            canManageProviders
-              ? 'Todavia no hay proveedores activos para asociar la compra. Registra o activa proveedores antes de continuar.'
-              : 'Todavia no hay proveedores activos para asociar la compra. Solicita al equipo administrador que registre o active proveedores.'
-          }
-          title="Proveedores pendientes"
-          tone="warning"
-        />
-      ) : null}
+          {!providersQuery.isLoading && !providersQuery.isError && !hasProviders ? (
+            <ResourceState
+              action={
+                canManageProviders ? (
+                  <button
+                    className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                    onClick={() => navigate('/admin/proveedores')}
+                    type="button"
+                  >
+                    Ir a proveedores
+                  </button>
+                ) : undefined
+              }
+              body={
+                canManageProviders
+                  ? 'Todavia no hay proveedores activos para asociar la compra. Registra o activa proveedores antes de continuar.'
+                  : 'Todavia no hay proveedores activos para asociar la compra. Solicita al equipo administrador que registre o active proveedores.'
+              }
+              title="Proveedores pendientes"
+              tone="warning"
+            />
+          ) : null}
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
         <div className="mb-5">
           <h2 className="text-lg font-semibold text-slate-950">Registrar compra</h2>
           <p className="mt-2 text-sm text-slate-600">Completa proveedor, comprobante, metodo de pago e items para registrar la compra con un resumen claro antes de guardar.</p>
@@ -592,11 +622,30 @@ export function PurchasePage() {
             {createMutation.isPending ? 'Registrando compra...' : 'Guardar compra'}
           </button>
         </form>
-      </section>
+          </section>
+        </>
+      )}
 
-      {purchasesQuery.isLoading ? <ResourceState body="Consultando compras registradas..." title="Cargando compras" /> : null}
+      {!activeContext ? (
+        <ResourceState
+          action={
+            <button
+              className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              onClick={() => navigate('/contexto')}
+              type="button"
+            >
+              Ir a seleccionar contexto
+            </button>
+          }
+          body="Selecciona un contexto operativo para consultar compras, detalle y anulaciones sin mezclar registros entre contextos."
+          title="Contexto requerido para listar compras"
+          tone="warning"
+        />
+      ) : null}
 
-      {purchasesQuery.isError ? (
+      {activeContext && purchasesQuery.isLoading ? <ResourceState body="Consultando compras registradas..." title="Cargando compras" /> : null}
+
+      {activeContext && purchasesQuery.isError ? (
         <ResourceState
           body={getApiErrorMessage(purchasesQuery.error, 'No se pudieron consultar las compras.')}
           title="Error al consultar compras"
@@ -604,7 +653,7 @@ export function PurchasePage() {
         />
       ) : null}
 
-      {!purchasesQuery.isLoading && !purchasesQuery.isError ? (
+      {activeContext && !purchasesQuery.isLoading && !purchasesQuery.isError ? (
         <>
           <ResourceTable<PurchaseListItemDto>
             columns={[
@@ -701,6 +750,8 @@ export function PurchasePage() {
                       <div className="text-sm text-slate-600">
                         <p><span className="font-medium text-slate-900">Observacion:</span> {selectedPurchase.observation ?? 'Sin observacion'}</p>
                         <p><span className="font-medium text-slate-900">Motivo de anulacion:</span> {selectedPurchase.cancellationReason ?? 'No aplica'}</p>
+                        <p><span className="font-medium text-slate-900">Anulada por:</span> {selectedPurchase.cancelledByUsername ?? 'No aplica'}</p>
+                        <p><span className="font-medium text-slate-900">Fecha de anulacion:</span> {formatDateTime(selectedPurchase.cancelledAt)}</p>
                       </div>
                     </div>
                   </>
@@ -709,16 +760,46 @@ export function PurchasePage() {
 
               <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
                 <h2 className="text-lg font-semibold text-slate-950">Anulacion de compra</h2>
-                <p className="mt-2 text-sm text-slate-600">El backend permite anular por item y cantidad pendiente.</p>
+                <p className="mt-2 text-sm text-slate-600">El backend permite anular por item y cantidad pendiente usando hoy el permiso real `compra.registrar`.</p>
 
                 <form
                   className="mt-5 space-y-4"
-                  onSubmit={cancelForm.handleSubmit((values) =>
+                  onSubmit={cancelForm.handleSubmit((values) => {
+                    if (!selectedPurchase) {
+                      return;
+                    }
+
+                    const requestedItems = values.cancelledItems.filter((item) => Number(item.cancelledQuantity) > 0);
+                    const invalidItem = requestedItems.find((item) => {
+                      const detailItem = selectedPurchase.items.find((candidate) => Number(candidate.id) === Number(item.purchaseItemId));
+                      const availableQuantity = detailItem
+                        ? Math.max(Number(detailItem.quantity) - Number(detailItem.cancelledQuantity), 0)
+                        : 0;
+                      return Number(item.cancelledQuantity) > availableQuantity;
+                    });
+
+                    if (invalidItem) {
+                      cancelForm.setError('cancelledItems', {
+                        type: 'manual',
+                        message: 'No puedes anular una cantidad mayor a la disponible en alguno de los items.',
+                      });
+                      return;
+                    }
+
+                    cancelForm.clearErrors('cancelledItems');
+                    const shouldContinue = window.confirm(
+                      `¿Confirmas aplicar la anulacion sobre la compra #${selectedPurchase.id}?\nItems afectados: ${requestedItems.length}\nEsta accion debe revertir stock segun el contrato real.`,
+                    );
+
+                    if (!shouldContinue) {
+                      return;
+                    }
+
                     cancelMutation.mutate({
                       reason: values.reason,
-                      cancelledItems: values.cancelledItems.filter((item) => Number(item.cancelledQuantity) > 0),
-                    }),
-                  )}
+                      cancelledItems: requestedItems,
+                    });
+                  })}
                 >
                   <div className="space-y-3">
                     {selectedPurchase ? cancelItemsFieldArray.fields.map((field, index) => {
@@ -746,6 +827,12 @@ export function PurchasePage() {
                     }) : null}
                   </div>
 
+                  {cancelForm.formState.errors.cancelledItems ? (
+                    <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                      {cancelForm.formState.errors.cancelledItems.message as string}
+                    </div>
+                  ) : null}
+
                   <label className="space-y-2">
                     <span className="text-sm font-medium text-slate-700">Motivo</span>
                     <textarea className={`${inputClass} min-h-28`} {...cancelForm.register('reason')} />
@@ -761,7 +848,9 @@ export function PurchasePage() {
                   ) : null}
 
                   {cancelMutation.isSuccess ? (
-                    <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Compra anulada o ajustada correctamente.</div>
+                    <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                      Compra anulada o ajustada correctamente. El listado, el stock y los reportes en cache se refrescaron; caja no aplica segun el contrato actual.
+                    </div>
                   ) : null}
 
                   <button

@@ -8,7 +8,11 @@ import type {
   PaginationParams,
 } from '../api/types';
 
-export async function fetchExpenses(params: PaginationParams = {}) {
+type ExpensesQueryParams = PaginationParams & {
+  operationalContextId: number;
+};
+
+export async function fetchExpenses(params: ExpensesQueryParams) {
   const response = await httpClient.get<ApiResponse<PaginatedResponse<ExpenseDto>>>(
     `/egresos${buildQueryString(params)}`,
   );

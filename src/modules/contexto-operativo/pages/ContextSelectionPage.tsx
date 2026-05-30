@@ -34,6 +34,8 @@ export function ContextSelectionPage() {
       ? '/caja/historial'
       : hasPermission('venta.registrar')
         ? '/ventas/nueva'
+        : hasPermission('venta.anular')
+          ? '/ventas/nueva'
         : hasPermission('compra.registrar')
           ? '/compras/nueva'
           : hasPermission('egreso.registrar')

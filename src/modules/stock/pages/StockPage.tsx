@@ -1,4 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MetricCard } from '../../../components/ui/MetricCard';
 import { ResourcePageShell } from '../../../components/ui/ResourcePageShell';
 import { ResourceState } from '../../../components/ui/ResourceState';
@@ -8,40 +10,58 @@ import { getApiErrorMessage } from '../../../services/api/errors';
 import { DEFAULT_PAGE_SIZE } from '../../../services/api/pagination';
 import type { StockCurrentDto, StockMovementDto } from '../../../services/api/types';
 import { fetchCurrentStockPage, fetchStockMovements, fetchStockMovementsPage } from '../../../services/stock/stock-api';
+import { useOperationalStore } from '../../../store/operational-store';
 import { formatDateTime } from '../../../utils/format';
-import { useMemo, useState } from 'react';
 
 type StockSummaryByProduct = {
   purchased: number;
   sold: number;
+  reversedIn: number;
+  reversedOut: number;
   adjustments: number;
 };
 
 export function StockPage() {
+  const navigate = useNavigate();
+  const activeContext = useOperationalStore((state) => state.activeContext);
+  const activeContextId = activeContext ? Number(activeContext.id) : null;
   const [stockPage, setStockPage] = useState(0);
   const [stockPageSize, setStockPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [movementsPage, setMovementsPage] = useState(0);
   const [movementsPageSize, setMovementsPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [movementsSort, setMovementsSort] = useState('occurredAt,desc');
 
+  useEffect(() => {
+    setStockPage(0);
+    setMovementsPage(0);
+  }, [activeContextId]);
+
   const stockQuery = useQuery({
-    queryKey: ['stock', 'current', stockPage, stockPageSize],
-    queryFn: () => fetchCurrentStockPage({ page: stockPage, size: stockPageSize }),
+    queryKey: ['stock', 'current', activeContextId, stockPage, stockPageSize],
+    queryFn: () => fetchCurrentStockPage({ operationalContextId: activeContextId as number, page: stockPage, size: stockPageSize }),
+    enabled: Boolean(activeContextId),
     retry: false,
     placeholderData: (previousData) => previousData,
   });
 
   const movementsQuery = useQuery({
-    queryKey: ['stock', 'movements', movementsPage, movementsPageSize, movementsSort],
+    queryKey: ['stock', 'movements', activeContextId, movementsPage, movementsPageSize, movementsSort],
     queryFn: () =>
-      fetchStockMovementsPage({ page: movementsPage, size: movementsPageSize, sort: movementsSort }),
+      fetchStockMovementsPage({
+        operationalContextId: activeContextId as number,
+        page: movementsPage,
+        size: movementsPageSize,
+        sort: movementsSort,
+      }),
+    enabled: Boolean(activeContextId),
     retry: false,
     placeholderData: (previousData) => previousData,
   });
 
   const allMovementsQuery = useQuery({
-    queryKey: ['stock', 'movements', 'all'],
-    queryFn: fetchStockMovements,
+    queryKey: ['stock', 'movements', 'all', activeContextId],
+    queryFn: () => fetchStockMovements(activeContextId as number),
+    enabled: Boolean(activeContextId),
     retry: false,
   });
 
@@ -55,7 +75,7 @@ export function StockPage() {
 
     allMovements.forEach((movement) => {
       const productId = Number(movement.productId);
-      const current = summary.get(productId) ?? { purchased: 0, sold: 0, adjustments: 0 };
+      const current = summary.get(productId) ?? { purchased: 0, sold: 0, reversedIn: 0, reversedOut: 0, adjustments: 0 };
       const quantity = Number(movement.quantity || 0);
       const movementType = String(movement.movementType ?? '').toUpperCase();
       const referenceType = String(movement.referenceType ?? '').toUpperCase();
@@ -64,6 +84,10 @@ export function StockPage() {
         current.purchased += quantity;
       } else if (movementType === 'SALIDA' || referenceType === 'VENTA') {
         current.sold += quantity;
+      } else if (movementType === 'REVERSA' && referenceType === 'VENTA_ANULADA') {
+        current.reversedIn += quantity;
+      } else if (movementType === 'REVERSA' && referenceType === 'COMPRA_ANULADA') {
+        current.reversedOut += quantity;
       } else {
         current.adjustments += quantity;
       }
@@ -75,28 +99,53 @@ export function StockPage() {
   }, [allMovements]);
   const totalSold = Array.from(stockSummaryByProduct.values()).reduce((sum, item) => sum + item.sold, 0);
   const totalPurchased = Array.from(stockSummaryByProduct.values()).reduce((sum, item) => sum + item.purchased, 0);
+  const totalReversedIn = Array.from(stockSummaryByProduct.values()).reduce((sum, item) => sum + item.reversedIn, 0);
+  const totalReversedOut = Array.from(stockSummaryByProduct.values()).reduce((sum, item) => sum + item.reversedOut, 0);
 
   return (
     <ResourcePageShell
       badge="FE-STK-001 Stock real"
-      description="Vista conectada a `GET /api/v1/stock` y `GET /api/v1/stock/movimientos` para validar existencias y trazabilidad real del inventario."
+      description="Vista conectada a `GET /api/v1/stock` y `GET /api/v1/stock/movimientos` para validar existencias y trazabilidad real del inventario aislado por contexto operativo."
       documents={['04 - HU-STK-001', '18 - API-STK-001/API-STK-002', '26 - Frontend Fase operativa']}
       summary={
-        <div className="grid gap-4 md:grid-cols-5">
+        <div className="grid gap-4 md:grid-cols-7">
+          <MetricCard helper="Contexto operativo activo aplicado a consultas y movimientos." label="Contexto" value={activeContext?.name ?? 'Sin contexto'} />
           <MetricCard helper="Productos recibidos por el backend." label="Items de stock" value={String(stockQuery.data?.totalElements ?? stock.length)} />
           <MetricCard helper="Productos controlados con alerta simple." label="Bajo minimo" value={String(lowStockCount)} />
-          <MetricCard helper="Cantidad total registrada como entrada por compras u otros ingresos." label="Ingresado" value={String(totalPurchased.toFixed(2))} />
-          <MetricCard helper="Cantidad total registrada como salida por ventas." label="Vendido" value={String(totalSold.toFixed(2))} />
+          <MetricCard helper="Cantidad total registrada como entrada bruta por compras." label="Ingresado" value={String(totalPurchased.toFixed(2))} />
+          <MetricCard helper="Cantidad total registrada como salida bruta por ventas." label="Vendido" value={String(totalSold.toFixed(2))} />
+          <MetricCard
+            helper="Reversas visibles por anulaciones. `+` repone stock por venta anulada y `-` descuenta stock por compra anulada."
+            label="Reversas"
+            value={`+${totalReversedIn.toFixed(2)} / -${totalReversedOut.toFixed(2)}`}
+          />
           <MetricCard helper="Util para detectar catalogo fuera de operacion." label="Productos inactivos" value={String(inactiveCount)} />
         </div>
       }
       title="Stock y movimientos"
     >
-      {stockQuery.isLoading || movementsQuery.isLoading ? (
+      {!activeContext ? (
+        <ResourceState
+          action={
+            <button
+              className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              onClick={() => navigate('/contexto')}
+              type="button"
+            >
+              Ir a seleccionar contexto
+            </button>
+          }
+          body="Selecciona un contexto operativo para consultar stock, movimientos y reversas sin mezclar datos entre negocios o eventos."
+          title="Contexto requerido para stock"
+          tone="warning"
+        />
+      ) : null}
+
+      {activeContext && (stockQuery.isLoading || movementsQuery.isLoading) ? (
         <ResourceState body="Consultando stock actual y movimientos desde el backend..." title="Cargando stock" />
       ) : null}
 
-      {stockQuery.isError ? (
+      {activeContext && stockQuery.isError ? (
         <ResourceState
           body={getApiErrorMessage(stockQuery.error, 'No se pudo consultar el stock actual.')}
           title="Error al consultar stock"
@@ -104,7 +153,7 @@ export function StockPage() {
         />
       ) : null}
 
-      {allMovementsQuery.isError ? (
+      {activeContext && allMovementsQuery.isError ? (
         <ResourceState
           body={getApiErrorMessage(allMovementsQuery.error, 'No se pudieron consolidar los movimientos para el resumen de stock.')}
           title="Error al consolidar trazabilidad"
@@ -112,7 +161,7 @@ export function StockPage() {
         />
       ) : null}
 
-      {movementsQuery.isError ? (
+      {activeContext && movementsQuery.isError ? (
         <ResourceState
           body={getApiErrorMessage(movementsQuery.error, 'No se pudieron consultar los movimientos de stock.')}
           title="Error al consultar movimientos"
@@ -120,11 +169,11 @@ export function StockPage() {
         />
       ) : null}
 
-      {!stockQuery.isLoading && !stockQuery.isError ? (
+      {activeContext && !stockQuery.isLoading && !stockQuery.isError ? (
         <section className="space-y-4">
           <div>
             <h2 className="text-lg font-semibold text-slate-950">Stock actual</h2>
-            <p className="text-sm text-slate-600">Existencias visibles para supervision operativa, incluyendo cuanto ingreso, cuanto salio por ventas, si el producto esta agotado y cuanto falta para volver al stock minimo.</p>
+            <p className="text-sm text-slate-600">Existencias visibles solo para el contexto activo, incluyendo compras, ventas, reversas por anulacion, si el producto esta agotado y cuanto falta para volver al stock minimo.</p>
           </div>
 
           {stock.length === 0 ? (
@@ -166,6 +215,21 @@ export function StockPage() {
                   key: 'sold',
                   header: 'Vendido',
                   render: (item) => Number(stockSummaryByProduct.get(Number(item.productId))?.sold ?? 0).toFixed(2),
+                },
+                {
+                  key: 'reversals',
+                  header: 'Reversas',
+                  render: (item) => {
+                    const summary = stockSummaryByProduct.get(Number(item.productId));
+                    const reversedIn = Number(summary?.reversedIn ?? 0).toFixed(2);
+                    const reversedOut = Number(summary?.reversedOut ?? 0).toFixed(2);
+                    return (
+                      <div>
+                        <p>+{reversedIn}</p>
+                        <p className="text-xs text-slate-500">-{reversedOut}</p>
+                      </div>
+                    );
+                  },
                 },
                 {
                   key: 'missing',
@@ -229,11 +293,11 @@ export function StockPage() {
         </section>
       ) : null}
 
-      {!movementsQuery.isLoading && !movementsQuery.isError ? (
+      {activeContext && !movementsQuery.isLoading && !movementsQuery.isError ? (
         <section className="space-y-4">
           <div>
             <h2 className="text-lg font-semibold text-slate-950">Movimientos de stock</h2>
-            <p className="text-sm text-slate-600">Trazabilidad operativa generada por compras, ventas y ajustes.</p>
+            <p className="text-sm text-slate-600">Trazabilidad operativa del contexto activo, generada por compras, ventas, anulaciones y ajustes.</p>
           </div>
 
           {movements.length === 0 ? (

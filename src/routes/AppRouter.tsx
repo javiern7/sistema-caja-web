@@ -76,7 +76,7 @@ export function AppRouter() {
           <Route element={<PermissionGuard permission="compra.registrar" />}>
             <Route path="/compras/nueva" element={<PurchasePage />} />
           </Route>
-          <Route element={<PermissionGuard permission="venta.registrar" />}>
+          <Route element={<PermissionGuard anyOf={['venta.registrar', 'venta.anular']} />}>
             <Route path="/ventas/nueva" element={<SalesPage />} />
           </Route>
 

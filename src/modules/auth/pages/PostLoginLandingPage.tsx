@@ -17,6 +17,7 @@ function resolveSuggestedRoute(options: {
   const canOpenCash = hasPermission('caja.abrir');
   const canCloseCash = hasPermission('caja.cerrar');
   const canRegisterSales = hasPermission('venta.registrar');
+  const canCancelSales = hasPermission('venta.anular');
   const canRegisterPurchases = hasPermission('compra.registrar');
   const canRegisterExpenses = hasPermission('egreso.registrar');
   const canManageProducts = hasPermission('producto.gestionar');
@@ -77,7 +78,7 @@ function resolveSuggestedRoute(options: {
     return '/caja/historial';
   }
 
-  if (canRegisterSales) {
+  if (canRegisterSales || canCancelSales) {
     return '/ventas/nueva';
   }
 

@@ -5,7 +5,7 @@ const adminSections = [
   {
     title: 'Catalogos y contexto',
     links: [
-      { to: '/admin/productos', label: 'Productos', visibleWhen: ['producto.gestionar'] },
+      { to: '/admin/productos', label: 'Productos', visibleWhen: ['producto.gestionar', 'venta.registrar', 'compra.registrar', 'stock.consultar'] },
       { to: '/admin/proveedores', label: 'Proveedores', visibleWhen: ['proveedor.gestionar', 'compra.registrar'] },
       { to: '/admin/contextos', label: 'Negocios/Eventos', visibleWhen: ['negocioevento.gestionar'] },
     ],

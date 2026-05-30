@@ -36,6 +36,11 @@ export function OperationalLayout() {
           ? '/admin/usuarios'
           : '/admin/roles';
   const canReadCash = hasPermission('caja.abrir') || hasPermission('caja.cerrar');
+  const canReadProducts =
+    hasPermission('producto.gestionar') ||
+    hasPermission('venta.registrar') ||
+    hasPermission('compra.registrar') ||
+    hasPermission('stock.consultar');
   const canReadProviders = hasPermission('proveedor.gestionar') || hasPermission('compra.registrar');
   const canAccessReports =
     hasPermission('auditoria.consultar') ||
@@ -92,6 +97,7 @@ export function OperationalLayout() {
     { to: '/ventas/nueva', label: 'Venta rapida', visible: hasPermission('venta.registrar') },
     { to: '/egresos/nuevo', label: 'Egresos', visible: hasPermission('egreso.registrar') },
     { to: '/compras/nueva', label: 'Compras', visible: hasPermission('compra.registrar') },
+    { to: '/admin/productos', label: 'Productos', visible: canReadProducts },
     { to: '/admin/proveedores', label: 'Proveedores', visible: canReadProviders },
     { to: '/stock', label: 'Stock', visible: hasPermission('stock.consultar') },
     { to: '/reportes', label: 'Reportes', visible: canAccessReports },

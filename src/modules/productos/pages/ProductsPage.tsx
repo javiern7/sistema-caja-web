@@ -12,6 +12,7 @@ import { getApiErrorMessage } from '../../../services/api/errors';
 import { DEFAULT_PAGE_SIZE } from '../../../services/api/pagination';
 import type { CreateProductRequest, ProductDto } from '../../../services/api/types';
 import { createProduct, fetchProductsPage, updateProduct, updateProductStatus } from '../../../services/catalogs/catalogs-api';
+import { useAuthStore } from '../../../store/auth-store';
 
 const productSchema = z.object({
   code: z.string().min(1, 'Ingresa el codigo.'),
@@ -31,6 +32,8 @@ const inputClass =
   'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-500';
 
 export function ProductsPage() {
+  const hasPermission = useAuthStore((state) => state.hasPermission);
+  const canManageProducts = hasPermission('producto.gestionar');
   const queryClient = useQueryClient();
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -125,7 +128,11 @@ export function ProductsPage() {
   return (
     <ResourcePageShell
       badge="FE-PRO-001 Productos"
-      description="Vista conectada a `GET`, `POST`, `PUT` y `PATCH` de productos para validar catalogo, edicion y cambio de estado real."
+      description={
+        canManageProducts
+          ? 'Vista conectada a `GET`, `POST`, `PUT` y `PATCH` de productos para validar catalogo, edicion y cambio de estado real.'
+          : 'Vista conectada a `GET /api/v1/productos` para consulta operativa del catalogo de productos.'
+      }
       documents={['04 - HU-PRO-001', '18 - API-PRO-001/API-PRO-002/API-PRO-003', '21 - Convenciones frontend por modulos']}
       summary={
         <div className="grid gap-4 md:grid-cols-3">
@@ -136,66 +143,74 @@ export function ProductsPage() {
       }
       title="Catalogo de productos"
     >
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
-        <div className="mb-5">
-          <h2 className="text-lg font-semibold text-slate-950">Registrar producto</h2>
-          <p className="mt-2 text-sm text-slate-600">Formulario alineado al contrato `CreateProductRequest` del backend.</p>
-        </div>
-
-        <form className="grid gap-4 md:grid-cols-2" onSubmit={createForm.handleSubmit((values) => createMutation.mutate(values))}>
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-slate-700">Codigo</span>
-            <input className={inputClass} {...createForm.register('code')} />
-            {createForm.formState.errors.code ? <span className="text-xs text-rose-600">{createForm.formState.errors.code.message}</span> : null}
-          </label>
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-slate-700">Nombre</span>
-            <input className={inputClass} {...createForm.register('name')} />
-            {createForm.formState.errors.name ? <span className="text-xs text-rose-600">{createForm.formState.errors.name.message}</span> : null}
-          </label>
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-slate-700">Unidad de medida</span>
-            <input className={inputClass} {...createForm.register('unitOfMeasure')} />
-          </label>
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-slate-700">Precio de venta</span>
-            <input className={inputClass} step="0.01" type="number" {...createForm.register('salePrice')} />
-          </label>
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-slate-700">Costo referencial</span>
-            <input className={inputClass} step="0.01" type="number" {...createForm.register('referenceCost')} />
-          </label>
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-slate-700">Stock minimo</span>
-            <input className={inputClass} step="0.01" type="number" {...createForm.register('minimumStock')} />
-          </label>
-          <label className="space-y-2 md:col-span-2">
-            <span className="text-sm font-medium text-slate-700">Descripcion</span>
-            <textarea className={`${inputClass} min-h-24`} {...createForm.register('description')} />
-          </label>
-          <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3">
-            <input type="checkbox" {...createForm.register('stockControlled')} />
-            <span className="text-sm text-slate-700">Controla stock</span>
-          </label>
-          <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3">
-            <input type="checkbox" {...createForm.register('active')} />
-            <span className="text-sm text-slate-700">Activo</span>
-          </label>
-          <div className="md:col-span-2">
-            {createMutation.isError ? (
-              <div className="mb-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                {getApiErrorMessage(createMutation.error, 'No se pudo registrar el producto.')}
-              </div>
-            ) : null}
-            {createMutation.isSuccess ? (
-              <div className="mb-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Producto registrado correctamente.</div>
-            ) : null}
-            <button className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-400" disabled={createMutation.isPending} type="submit">
-              {createMutation.isPending ? 'Guardando producto...' : 'Guardar producto'}
-            </button>
+      {canManageProducts ? (
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold text-slate-950">Registrar producto</h2>
+            <p className="mt-2 text-sm text-slate-600">Formulario alineado al contrato `CreateProductRequest` del backend.</p>
           </div>
-        </form>
-      </section>
+
+          <form className="grid gap-4 md:grid-cols-2" onSubmit={createForm.handleSubmit((values) => createMutation.mutate(values))}>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">Codigo</span>
+              <input className={inputClass} {...createForm.register('code')} />
+              {createForm.formState.errors.code ? <span className="text-xs text-rose-600">{createForm.formState.errors.code.message}</span> : null}
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">Nombre</span>
+              <input className={inputClass} {...createForm.register('name')} />
+              {createForm.formState.errors.name ? <span className="text-xs text-rose-600">{createForm.formState.errors.name.message}</span> : null}
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">Unidad de medida</span>
+              <input className={inputClass} {...createForm.register('unitOfMeasure')} />
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">Precio de venta</span>
+              <input className={inputClass} step="0.01" type="number" {...createForm.register('salePrice')} />
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">Costo referencial</span>
+              <input className={inputClass} step="0.01" type="number" {...createForm.register('referenceCost')} />
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">Stock minimo</span>
+              <input className={inputClass} step="0.01" type="number" {...createForm.register('minimumStock')} />
+            </label>
+            <label className="space-y-2 md:col-span-2">
+              <span className="text-sm font-medium text-slate-700">Descripcion</span>
+              <textarea className={`${inputClass} min-h-24`} {...createForm.register('description')} />
+            </label>
+            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3">
+              <input type="checkbox" {...createForm.register('stockControlled')} />
+              <span className="text-sm text-slate-700">Controla stock</span>
+            </label>
+            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3">
+              <input type="checkbox" {...createForm.register('active')} />
+              <span className="text-sm text-slate-700">Activo</span>
+            </label>
+            <div className="md:col-span-2">
+              {createMutation.isError ? (
+                <div className="mb-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  {getApiErrorMessage(createMutation.error, 'No se pudo registrar el producto.')}
+                </div>
+              ) : null}
+              {createMutation.isSuccess ? (
+                <div className="mb-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Producto registrado correctamente.</div>
+              ) : null}
+              <button className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-400" disabled={createMutation.isPending} type="submit">
+                {createMutation.isPending ? 'Guardando producto...' : 'Guardar producto'}
+              </button>
+            </div>
+          </form>
+        </section>
+      ) : (
+        <ResourceState
+          body="Tu sesion puede consultar productos para ventas, compras o stock, pero no crear ni editar este catalogo."
+          title="Consulta habilitada"
+          tone="default"
+        />
+      )}
 
       {productsQuery.isLoading ? <ResourceState body="Consultando productos desde el backend..." title="Cargando catalogo" /> : null}
 
@@ -271,6 +286,10 @@ export function ProductsPage() {
                 key: 'actions',
                 header: 'Acciones',
                 render: (product) => {
+                  if (!canManageProducts) {
+                    return <span className="text-xs text-slate-500">Solo consulta</span>;
+                  }
+
                   const isCurrentProduct = String(product.id) === selectedProductId;
                   const isTogglingStatus = toggleStatusMutation.isPending && toggleStatusMutation.variables?.productId === Number(product.id);
 
@@ -322,7 +341,7 @@ export function ProductsPage() {
             }}
           />
 
-          {selectedProduct ? (
+          {canManageProducts && selectedProduct ? (
             <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
               <div className="mb-5">
                 <h2 className="text-lg font-semibold text-slate-950">Editar producto</h2>

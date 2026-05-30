@@ -119,7 +119,7 @@ export function AppRouter() {
         </Route>
 
         <Route element={<AdminLayout />}>
-          <Route element={<PermissionGuard permission="producto.gestionar" />}>
+          <Route element={<PermissionGuard anyOf={['producto.gestionar', 'venta.registrar', 'compra.registrar', 'stock.consultar']} />}>
             <Route path="/admin/productos" element={<ProductsPage />} />
           </Route>
           <Route element={<PermissionGuard anyOf={['proveedor.gestionar', 'compra.registrar']} />}>

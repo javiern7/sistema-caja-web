@@ -14,6 +14,12 @@ export function OperationalLayout() {
   const user = useAuthStore((state) => state.user);
   const clearSession = useAuthStore((state) => state.clearSession);
   const hasPermission = useAuthStore((state) => state.hasPermission);
+  const canAccessOperationalContexts =
+    hasPermission('negocioevento.gestionar') ||
+    hasPermission('caja.abrir') ||
+    hasPermission('venta.registrar') ||
+    hasPermission('compra.registrar') ||
+    hasPermission('egreso.registrar');
   const hasAdminAccess =
     hasPermission('producto.gestionar') ||
     hasPermission('proveedor.gestionar') ||
@@ -30,6 +36,7 @@ export function OperationalLayout() {
           ? '/admin/usuarios'
           : '/admin/roles';
   const canReadCash = hasPermission('caja.abrir') || hasPermission('caja.cerrar');
+  const canReadProviders = hasPermission('proveedor.gestionar') || hasPermission('compra.registrar');
   const canAccessReports =
     hasPermission('auditoria.consultar') ||
     hasPermission('reporte.ver') ||
@@ -78,13 +85,14 @@ export function OperationalLayout() {
   }, [activeCashQuery.data, activeCashQuery.error, activeCashQuery.isError, activeCashQuery.isSuccess, activeContext, setActiveCash]);
 
   const navItems = [
-    { to: '/contexto', label: 'Contexto', visible: true },
+    { to: '/contexto', label: 'Contexto', visible: canAccessOperationalContexts },
     { to: '/caja/apertura', label: 'Apertura', visible: hasPermission('caja.abrir') },
     { to: '/caja/activa', label: 'Caja activa', visible: canReadCash },
     { to: '/caja/historial', label: 'Historial cajas', visible: canReadCash && Boolean(activeContext) },
     { to: '/ventas/nueva', label: 'Venta rapida', visible: hasPermission('venta.registrar') },
     { to: '/egresos/nuevo', label: 'Egresos', visible: hasPermission('egreso.registrar') },
     { to: '/compras/nueva', label: 'Compras', visible: hasPermission('compra.registrar') },
+    { to: '/admin/proveedores', label: 'Proveedores', visible: canReadProviders },
     { to: '/stock', label: 'Stock', visible: hasPermission('stock.consultar') },
     { to: '/reportes', label: 'Reportes', visible: canAccessReports },
     { to: adminRoute, label: 'Administracion', visible: hasAdminAccess },
@@ -107,12 +115,16 @@ export function OperationalLayout() {
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-slate-900">Contexto</p>
                 <StatusBadge
-                  label={activeContext ? 'Listo' : 'Pendiente'}
-                  tone={activeContext ? 'success' : 'warning'}
+                  label={!canAccessOperationalContexts ? 'No aplica' : activeContext ? 'Listo' : 'Pendiente'}
+                  tone={!canAccessOperationalContexts ? 'neutral' : activeContext ? 'success' : 'warning'}
                 />
               </div>
               <p className="text-sm text-slate-600">
-                {activeContext ? `${activeContext.name} (${activeContext.kind})` : 'Selecciona negocio o evento.'}
+                {!canAccessOperationalContexts
+                  ? 'Tu sesion no necesita seleccionar contexto para los modulos visibles.'
+                  : activeContext
+                    ? `${activeContext.name} (${activeContext.kind})`
+                    : 'Selecciona negocio o evento.'}
               </p>
             </div>
 

@@ -8,21 +8,40 @@ import { useAuthStore } from '../../../store/auth-store';
 import { useOperationalStore } from '../../../store/operational-store';
 
 function resolveSuggestedRoute(options: {
-  role?: string | null;
   hasPermission: (permission: string) => boolean;
   hasActiveContext: boolean;
   hasOpenCash: boolean;
   hasAvailableContexts: boolean;
 }) {
-  const { role, hasPermission, hasActiveContext, hasOpenCash, hasAvailableContexts } = options;
+  const { hasPermission, hasActiveContext, hasOpenCash, hasAvailableContexts } = options;
+  const canOpenCash = hasPermission('caja.abrir');
+  const canCloseCash = hasPermission('caja.cerrar');
+  const canRegisterSales = hasPermission('venta.registrar');
+  const canRegisterPurchases = hasPermission('compra.registrar');
+  const canRegisterExpenses = hasPermission('egreso.registrar');
+  const canManageProducts = hasPermission('producto.gestionar');
+  const canManageProviders = hasPermission('proveedor.gestionar');
+  const canManageUsers = hasPermission('usuario.gestionar');
+  const canManageRoles = hasPermission('rol.gestionar');
+  const canManageContexts = hasPermission('negocioevento.gestionar');
+  const canAccessReports =
+    hasPermission('auditoria.consultar') ||
+    hasPermission('reporte.ver') ||
+    hasPermission('reporte.exportar') ||
+    hasPermission('reporte.ventas') ||
+    hasPermission('reporte.caja') ||
+    hasPermission('reporte.compras') ||
+    hasPermission('reporte.egresos') ||
+    hasPermission('reporte.stock') ||
+    hasPermission('reporte.utilidad');
   const hasOperationalFlow =
-    hasPermission('caja.abrir') ||
-    hasPermission('caja.cerrar') ||
-    hasPermission('venta.registrar') ||
-    hasPermission('compra.registrar') ||
-    hasPermission('egreso.registrar');
+    canOpenCash ||
+    canCloseCash ||
+    canRegisterSales ||
+    canRegisterPurchases ||
+    canRegisterExpenses;
 
-  if (!hasAvailableContexts && hasPermission('negocioevento.gestionar')) {
+  if (!hasAvailableContexts && canManageContexts) {
     return '/admin/contextos';
   }
 
@@ -30,19 +49,39 @@ function resolveSuggestedRoute(options: {
     return '/contexto';
   }
 
-  if (role === 'Administrador' && hasPermission('producto.gestionar')) {
+  if (canManageProducts) {
     return '/admin/productos';
   }
 
-  if (hasPermission('venta.registrar') && !hasOpenCash) {
+  if (canManageProviders) {
+    return '/admin/proveedores';
+  }
+
+  if (canManageUsers) {
+    return '/admin/usuarios';
+  }
+
+  if (canManageRoles) {
+    return '/admin/roles';
+  }
+
+  if (canOpenCash && !hasOpenCash) {
     return '/caja/apertura';
   }
 
-  if (hasPermission('venta.registrar') || hasPermission('caja.cerrar')) {
+  if (canRegisterSales && hasOpenCash) {
     return '/caja/activa';
   }
 
-  if (hasPermission('compra.registrar')) {
+  if (canCloseCash) {
+    return '/caja/historial';
+  }
+
+  if (canRegisterSales) {
+    return '/ventas/nueva';
+  }
+
+  if (canRegisterPurchases) {
     return '/compras/nueva';
   }
 
@@ -50,15 +89,15 @@ function resolveSuggestedRoute(options: {
     return '/stock';
   }
 
-  if (hasPermission('egreso.registrar')) {
+  if (canRegisterExpenses) {
     return '/egresos/nuevo';
   }
 
-  if (hasPermission('reporte.ver') || hasPermission('auditoria.consultar')) {
+  if (canAccessReports) {
     return '/reportes';
   }
 
-  if (hasPermission('negocioevento.gestionar')) {
+  if (canManageContexts) {
     return '/admin/contextos';
   }
 
@@ -76,10 +115,17 @@ export function PostLoginLandingPage() {
   const setAvailableContexts = useOperationalStore((state) => state.setAvailableContexts);
   const setActiveContext = useOperationalStore((state) => state.setActiveContext);
 
+  const canAccessOperationalContexts =
+    hasPermission('negocioevento.gestionar') ||
+    hasPermission('caja.abrir') ||
+    hasPermission('venta.registrar') ||
+    hasPermission('compra.registrar') ||
+    hasPermission('egreso.registrar');
+
   const contextsQuery = useQuery({
     queryKey: ['contextos-operativos'],
     queryFn: fetchOperationalContexts,
-    enabled: Boolean(token),
+    enabled: Boolean(token) && canAccessOperationalContexts,
     retry: false,
   });
 
@@ -90,7 +136,6 @@ export function PostLoginLandingPage() {
   }, [contextsQuery.data, setAvailableContexts]);
 
   const suggestedRoute = resolveSuggestedRoute({
-    role: user?.role ?? null,
     hasPermission,
     hasActiveContext: Boolean(activeContext),
     hasOpenCash: activeCash?.status === 'ABIERTA',
@@ -128,9 +173,15 @@ export function PostLoginLandingPage() {
 
         <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Contexto activo</p>
-          <p className="mt-3 text-lg font-semibold text-slate-900">{activeContext?.name ?? 'Sin contexto activo'}</p>
+          <p className="mt-3 text-lg font-semibold text-slate-900">
+            {canAccessOperationalContexts ? activeContext?.name ?? 'Sin contexto activo' : 'No aplica a esta sesion'}
+          </p>
           <p className="mt-1 text-sm text-slate-600">
-            {activeContext ? `${activeContext.kind} en estado ${activeContext.status}` : 'Aun no se ha seleccionado uno.'}
+            {!canAccessOperationalContexts
+              ? 'Los modulos visibles para tu sesion no requieren seleccionar contexto operativo.'
+              : activeContext
+                ? `${activeContext.kind} en estado ${activeContext.status}`
+                : 'Aun no se ha seleccionado uno.'}
           </p>
         </article>
       </section>
@@ -151,15 +202,15 @@ export function PostLoginLandingPage() {
           </button>
         </div>
 
-        {contextsQuery.isLoading ? <p className="mt-4 text-sm text-slate-600">Cargando contextos operativos...</p> : null}
+        {canAccessOperationalContexts && contextsQuery.isLoading ? <p className="mt-4 text-sm text-slate-600">Cargando contextos operativos...</p> : null}
 
-        {contextsQuery.isError ? (
+        {canAccessOperationalContexts && contextsQuery.isError ? (
           <div className="mt-4 rounded-3xl bg-rose-50 px-4 py-4 text-sm text-rose-700">
             {getApiErrorMessage(contextsQuery.error, 'No se pudieron cargar los contextos operativos.')}
           </div>
         ) : null}
 
-        {!contextsQuery.isLoading && !contextsQuery.isError && !hasContexts ? (
+        {canAccessOperationalContexts && !contextsQuery.isLoading && !contextsQuery.isError && !hasContexts ? (
           <div className="mt-4 space-y-4 rounded-3xl bg-amber-50 px-4 py-4 text-sm text-amber-700">
             <p>
               La sesion esta activa, pero el backend no devolvio contextos operativos disponibles para este usuario.
@@ -179,7 +230,7 @@ export function PostLoginLandingPage() {
           </div>
         ) : null}
 
-        {!contextsQuery.isLoading && hasContexts ? (
+        {canAccessOperationalContexts && !contextsQuery.isLoading && hasContexts ? (
           <div className="mt-5 space-y-3">
             <p className="text-sm font-medium text-slate-700">Contextos detectados</p>
             <div className="grid gap-3 md:grid-cols-2">

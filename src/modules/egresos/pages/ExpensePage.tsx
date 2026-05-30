@@ -13,6 +13,7 @@ import { getApiErrorMessage } from '../../../services/api/errors';
 import { DEFAULT_PAGE_SIZE } from '../../../services/api/pagination';
 import type { CreateExpenseRequest, ExpenseDto } from '../../../services/api/types';
 import { createExpense, fetchExpenseDetail, fetchExpenses } from '../../../services/expenses/expenses-api';
+import { useAuthStore } from '../../../store/auth-store';
 import { useOperationalStore } from '../../../store/operational-store';
 import { formatCurrency, formatDate, formatDateTime } from '../../../utils/format';
 
@@ -60,6 +61,8 @@ function initialExpenseValues(): ExpenseFormValues {
 export function ExpensePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const hasPermission = useAuthStore((state) => state.hasPermission);
+  const canOpenCash = hasPermission('caja.abrir');
   const activeContext = useOperationalStore((state) => state.activeContext);
   const activeCash = useOperationalStore((state) => state.activeCash);
   const [selectedExpenseId, setSelectedExpenseId] = useState<string | null>(null);
@@ -167,7 +170,7 @@ export function ExpensePage() {
     >
       {!hasOpenCash ? (
         <ResourceState
-          action={
+          action={canOpenCash ? (
             <button
               className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
               onClick={() => navigate('/caja/apertura')}
@@ -175,8 +178,12 @@ export function ExpensePage() {
             >
               Ir a apertura de caja
             </button>
+          ) : undefined}
+          body={
+            canOpenCash
+              ? 'Necesitas una caja abierta para registrar egresos en este flujo operativo.'
+              : 'Necesitas una caja abierta para registrar egresos en este flujo operativo. Solicita a un usuario con permiso de apertura que habilite la caja.'
           }
-          body="Necesitas una caja abierta para registrar egresos en este flujo operativo."
           title="Caja abierta pendiente"
           tone="warning"
         />

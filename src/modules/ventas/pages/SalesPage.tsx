@@ -79,6 +79,7 @@ export function SalesPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const hasPermission = useAuthStore((state) => state.hasPermission);
+  const canOpenCash = hasPermission('caja.abrir');
   const activeContext = useOperationalStore((state) => state.activeContext);
   const activeCash = useOperationalStore((state) => state.activeCash);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
@@ -311,7 +312,7 @@ export function SalesPage() {
   if (!activeCash) {
     return (
       <ResourceState
-        action={
+        action={canOpenCash ? (
           <button
             className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
             onClick={() => navigate('/caja/apertura')}
@@ -319,8 +320,12 @@ export function SalesPage() {
           >
             Ir a apertura de caja
           </button>
+        ) : undefined}
+        body={
+          canOpenCash
+            ? 'Necesitas contexto operativo y caja abierta para registrar ventas reales.'
+            : 'Necesitas una caja abierta para registrar ventas reales. Solicita a un usuario con permiso de apertura que habilite la caja.'
         }
-        body="Necesitas contexto operativo y caja abierta para registrar ventas reales."
         title="Venta no disponible"
         tone="warning"
       />
@@ -330,7 +335,7 @@ export function SalesPage() {
   if (activeCash.status !== 'ABIERTA') {
     return (
       <ResourceState
-        action={
+        action={canOpenCash ? (
           <button
             className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
             onClick={() => navigate('/caja/apertura')}
@@ -338,8 +343,12 @@ export function SalesPage() {
           >
             Ir a apertura de caja
           </button>
+        ) : undefined}
+        body={
+          canOpenCash
+            ? 'La caja visible en el estado operativo ya no esta abierta. Debes abrir una nueva caja antes de registrar ventas.'
+            : 'La caja visible en el estado operativo ya no esta abierta. Solicita a un usuario con permiso de apertura que habilite una nueva caja.'
         }
-        body="La caja visible en el estado operativo ya no esta abierta. Debes abrir una nueva caja antes de registrar ventas."
         title="Caja abierta pendiente"
         tone="warning"
       />

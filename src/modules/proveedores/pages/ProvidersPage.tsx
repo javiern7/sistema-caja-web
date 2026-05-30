@@ -12,6 +12,7 @@ import { getApiErrorMessage } from '../../../services/api/errors';
 import { DEFAULT_PAGE_SIZE } from '../../../services/api/pagination';
 import type { CreateProviderRequest, ProviderDto, UpdateProviderRequest } from '../../../services/api/types';
 import { createProvider, fetchProvidersPage, updateProvider } from '../../../services/catalogs/catalogs-api';
+import { useAuthStore } from '../../../store/auth-store';
 
 const providerSchema = z.object({
   name: z.string().min(1, 'Ingresa el nombre del proveedor.'),
@@ -26,6 +27,8 @@ type ProviderFormValues = z.infer<typeof providerSchema>;
 const inputClass = 'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-500';
 
 export function ProvidersPage() {
+  const hasPermission = useAuthStore((state) => state.hasPermission);
+  const canManageProviders = hasPermission('proveedor.gestionar');
   const queryClient = useQueryClient();
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -92,7 +95,11 @@ export function ProvidersPage() {
   return (
     <ResourcePageShell
       badge="FE-PRV-001 Proveedores"
-      description="Vista conectada a `GET`, `POST` y `PUT` de proveedores para validar catalogo, actualizacion y uso real en compras."
+      description={
+        canManageProviders
+          ? 'Vista conectada a `GET`, `POST` y `PUT` de proveedores para validar catalogo, actualizacion y uso real en compras.'
+          : 'Vista conectada a `GET /api/v1/proveedores` para consulta de proveedores disponibles en el flujo de compras.'
+      }
       documents={['04 - HU-COM-001', '18 - API-PRV-001/API-PRV-002/API-PRV-003', '25 - Orquestador Fase 1']}
       summary={
         <div className="grid gap-4 md:grid-cols-3">
@@ -103,25 +110,33 @@ export function ProvidersPage() {
       }
       title="Proveedores"
     >
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
-        <div className="mb-5">
-          <h2 className="text-lg font-semibold text-slate-950">Registrar proveedor</h2>
-          <p className="mt-2 text-sm text-slate-600">Formulario alineado al contrato `CreateProviderRequest` del backend.</p>
-        </div>
-        <form className="grid gap-4 md:grid-cols-2" onSubmit={createForm.handleSubmit((values) => createMutation.mutate(values))}>
-          <label className="space-y-2"><span className="text-sm font-medium text-slate-700">Nombre</span><input className={inputClass} {...createForm.register('name')} /></label>
-          <label className="space-y-2"><span className="text-sm font-medium text-slate-700">Documento</span><input className={inputClass} {...createForm.register('documentNumber')} /></label>
-          <label className="space-y-2"><span className="text-sm font-medium text-slate-700">Contacto</span><input className={inputClass} {...createForm.register('contactName')} /></label>
-          <label className="space-y-2"><span className="text-sm font-medium text-slate-700">Telefono</span><input className={inputClass} {...createForm.register('phone')} /></label>
-          <label className="space-y-2 md:col-span-2"><span className="text-sm font-medium text-slate-700">Correo</span><input className={inputClass} {...createForm.register('email')} /></label>
-          <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 md:col-span-2"><input type="checkbox" {...createForm.register('active')} /><span className="text-sm text-slate-700">Activo</span></label>
-          <div className="md:col-span-2">
-            {createMutation.isError ? <div className="mb-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{getApiErrorMessage(createMutation.error, 'No se pudo registrar el proveedor.')}</div> : null}
-            {createMutation.isSuccess ? <div className="mb-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Proveedor registrado correctamente.</div> : null}
-            <button className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-400" disabled={createMutation.isPending} type="submit">{createMutation.isPending ? 'Guardando proveedor...' : 'Guardar proveedor'}</button>
+      {canManageProviders ? (
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold text-slate-950">Registrar proveedor</h2>
+            <p className="mt-2 text-sm text-slate-600">Formulario alineado al contrato `CreateProviderRequest` del backend.</p>
           </div>
-        </form>
-      </section>
+          <form className="grid gap-4 md:grid-cols-2" onSubmit={createForm.handleSubmit((values) => createMutation.mutate(values))}>
+            <label className="space-y-2"><span className="text-sm font-medium text-slate-700">Nombre</span><input className={inputClass} {...createForm.register('name')} /></label>
+            <label className="space-y-2"><span className="text-sm font-medium text-slate-700">Documento</span><input className={inputClass} {...createForm.register('documentNumber')} /></label>
+            <label className="space-y-2"><span className="text-sm font-medium text-slate-700">Contacto</span><input className={inputClass} {...createForm.register('contactName')} /></label>
+            <label className="space-y-2"><span className="text-sm font-medium text-slate-700">Telefono</span><input className={inputClass} {...createForm.register('phone')} /></label>
+            <label className="space-y-2 md:col-span-2"><span className="text-sm font-medium text-slate-700">Correo</span><input className={inputClass} {...createForm.register('email')} /></label>
+            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 md:col-span-2"><input type="checkbox" {...createForm.register('active')} /><span className="text-sm text-slate-700">Activo</span></label>
+            <div className="md:col-span-2">
+              {createMutation.isError ? <div className="mb-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{getApiErrorMessage(createMutation.error, 'No se pudo registrar el proveedor.')}</div> : null}
+              {createMutation.isSuccess ? <div className="mb-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Proveedor registrado correctamente.</div> : null}
+              <button className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-400" disabled={createMutation.isPending} type="submit">{createMutation.isPending ? 'Guardando proveedor...' : 'Guardar proveedor'}</button>
+            </div>
+          </form>
+        </section>
+      ) : (
+        <ResourceState
+          body="Tu sesion puede consultar proveedores para registrar compras, pero no crear ni editar este catalogo."
+          title="Consulta habilitada"
+          tone="default"
+        />
+      )}
 
       {providersQuery.isLoading ? <ResourceState body="Consultando proveedores..." title="Cargando proveedores" /> : null}
       {providersQuery.isError ? <ResourceState body={getApiErrorMessage(providersQuery.error, 'No se pudo cargar la lista de proveedores.')} title="Error al consultar proveedores" tone="danger" /> : null}
@@ -165,6 +180,10 @@ export function ProvidersPage() {
                 key: 'actions',
                 header: 'Acciones',
                 render: (provider) => {
+                  if (!canManageProviders) {
+                    return <span className="text-xs text-slate-500">Solo consulta</span>;
+                  }
+
                   const isCurrentProvider = String(provider.id) === selectedProviderId;
                   const isTogglingStatus = toggleStatusMutation.isPending && toggleStatusMutation.variables?.providerId === Number(provider.id);
 
@@ -227,7 +246,7 @@ export function ProvidersPage() {
               },
             }}
           />
-          {selectedProvider ? (
+          {canManageProviders && selectedProvider ? (
             <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
               <div className="mb-5">
                 <h2 className="text-lg font-semibold text-slate-950">Editar proveedor</h2>

@@ -1,24 +1,33 @@
 import { NavLink, Outlet } from 'react-router-dom';
+import { useAuthStore } from '../store/auth-store';
 
 const adminSections = [
   {
     title: 'Catalogos y contexto',
     links: [
-      { to: '/admin/productos', label: 'Productos' },
-      { to: '/admin/proveedores', label: 'Proveedores' },
-      { to: '/admin/contextos', label: 'Negocios/Eventos' },
+      { to: '/admin/productos', label: 'Productos', visibleWhen: ['producto.gestionar'] },
+      { to: '/admin/proveedores', label: 'Proveedores', visibleWhen: ['proveedor.gestionar', 'compra.registrar'] },
+      { to: '/admin/contextos', label: 'Negocios/Eventos', visibleWhen: ['negocioevento.gestionar'] },
     ],
   },
   {
     title: 'Seguridad',
     links: [
-      { to: '/admin/usuarios', label: 'Usuarios' },
-      { to: '/admin/roles', label: 'Roles y permisos' },
+      { to: '/admin/usuarios', label: 'Usuarios', visibleWhen: ['usuario.gestionar'] },
+      { to: '/admin/roles', label: 'Roles y permisos', visibleWhen: ['rol.gestionar'] },
     ],
   },
 ];
 
 export function AdminLayout() {
+  const hasPermission = useAuthStore((state) => state.hasPermission);
+  const visibleSections = adminSections
+    .map((section) => ({
+      ...section,
+      links: section.links.filter((link) => link.visibleWhen.some((permission) => hasPermission(permission))),
+    }))
+    .filter((section) => section.links.length > 0);
+
   return (
     <div className="min-h-screen bg-app-gradient px-4 py-4">
       <div className="mx-auto grid min-h-screen max-w-7xl gap-6 lg:grid-cols-[280px_1fr]">
@@ -37,7 +46,7 @@ export function AdminLayout() {
           </div>
           <p className="mt-3 text-sm text-slate-600">Separamos catalogos operativos del bloque de seguridad para que la administracion sea mas facil de recorrer.</p>
           <nav className="mt-6 space-y-5">
-            {adminSections.map((section) => (
+            {visibleSections.map((section) => (
               <div key={section.title}>
                 <p className="px-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{section.title}</p>
                 <div className="mt-2 space-y-2">

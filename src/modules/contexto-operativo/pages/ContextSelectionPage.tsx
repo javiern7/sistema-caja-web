@@ -32,13 +32,17 @@ export function ContextSelectionPage() {
     ? '/caja/apertura'
     : hasPermission('caja.cerrar')
       ? '/caja/historial'
-      : hasPermission('compra.registrar')
-        ? '/compras/nueva'
-        : hasPermission('egreso.registrar')
-          ? '/egresos/nuevo'
-          : hasPermission('stock.consultar')
-            ? '/stock'
-            : '/sin-permiso';
+      : hasPermission('venta.registrar')
+        ? '/ventas/nueva'
+        : hasPermission('compra.registrar')
+          ? '/compras/nueva'
+          : hasPermission('egreso.registrar')
+            ? '/egresos/nuevo'
+            : hasPermission('stock.consultar')
+              ? '/stock'
+              : canManageContexts
+                ? '/admin/contextos'
+                : '/sin-permiso';
 
   return (
     <PlaceholderPage

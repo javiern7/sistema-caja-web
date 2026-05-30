@@ -54,7 +54,15 @@ export function AppRouter() {
         <Route element={<OperationalLayout />}>
           <Route path="/inicio" element={<PostLoginLandingPage />} />
           <Route path="/sin-permiso" element={<AccessDeniedPage />} />
-          <Route path="/contexto" element={<ContextSelectionPage />} />
+          <Route
+            element={
+              <PermissionGuard
+                anyOf={['negocioevento.gestionar', 'caja.abrir', 'venta.registrar', 'compra.registrar', 'egreso.registrar']}
+              />
+            }
+          >
+            <Route path="/contexto" element={<ContextSelectionPage />} />
+          </Route>
 
           <Route element={<PermissionGuard permission="caja.abrir" />}>
             <Route path="/caja/apertura" element={<CashOpeningPage />} />
@@ -114,7 +122,7 @@ export function AppRouter() {
           <Route element={<PermissionGuard permission="producto.gestionar" />}>
             <Route path="/admin/productos" element={<ProductsPage />} />
           </Route>
-          <Route element={<PermissionGuard permission="proveedor.gestionar" />}>
+          <Route element={<PermissionGuard anyOf={['proveedor.gestionar', 'compra.registrar']} />}>
             <Route path="/admin/proveedores" element={<ProvidersPage />} />
           </Route>
           <Route element={<PermissionGuard permission="usuario.gestionar" />}>
